@@ -62,12 +62,12 @@ function person(g,p,ph){
     g.restore()};
   leg(-1,la);leg(1,-la);
   // 팔
-  const armCol=(t==='dress'||t==='tee')?skin:t==='vest'?p.shirt:p.topCol;
+  const armCol=(t==='dress'||t==='tee'||t==='party')?skin:t==='vest'?p.shirt:p.topCol;
   const arm=(s,an)=>{g.save();g.translate(s*(sw+2),-77);
     const aim=p.aim&&s===d; // 총을 겨눈 팔은 앞으로 뻗음
     g.rotate(aim?-d*Math.PI*.47:an);
     P(g,armCol,RR(g,-3.5,-2,7,31,3.5));
-    if(t==='tee')P(g,p.topCol,RR(g,-3.5,-2,7,10,3));
+    if(t==='tee'||t==='party')P(g,p.topCol,RR(g,-3.5,-2,7,10,3));
     if(t==='track')P(g,p.stripe,RR(g,s>0?2:-3,0,1,28,0));
     if(aim){P(g,'#8a8a92',RR(g,-1.6,31,3.2,11,.5));P(g,'#6a6a72',RR(g,-1.6,29,3.2,4,.5))}
     P(g,skin,EL(g,0,30.5,3.4,3.8));
@@ -98,7 +98,14 @@ function person(g,p,ph){
     g.fillStyle='#8a8a90';for(let y=-58;y<-47;y+=4.5)g.fillRect(-.7,y,1.4,1.4);
     P(g,'#0a0a0c',PL(g,[-4,-81.5,0,-79.5,-4,-77.5]));P(g,'#0a0a0c',PL(g,[4,-81.5,0,-79.5,4,-77.5]));
   }
-  if(t==='shirt'){
+  if(t==='party'||p.sparkle){ // 파티 셔츠 무늬 · 드레스 반짝이 (몸통 안쪽에만)
+    g.save();g.beginPath();
+    if(t==='dress'){PL(g,[-10,-75,10,-75,9,-56,-9,-56])();PL(g,[-11,-58,11,-58,17,-25,-17,-25])()}else PL(g,[-sw,-80,sw,-80,sw-3,-46,-sw+3,-46])();
+    g.clip();g.fillStyle=t==='party'?shade(p.topCol,1.7):'rgba(255,255,255,.6)';
+    for(let yy=-80,r=0;yy<-24;yy+=4.5,r++)for(let xx=-18+(r%2)*2.2;xx<=18;xx+=4.5)g.fillRect(xx-.75,yy,1.5,1.5);
+    g.restore();
+  }
+  if(t==='shirt'||t==='party'){
     P(g,skin,PL(g,[-2.5,-81,2.5,-81,0,-76]));
     P(g,p.topDark,PL(g,[-5.5,-81,-.5,-78,-4,-74]));P(g,p.topDark,PL(g,[5.5,-81,.5,-78,4,-74]));
     g.fillStyle=p.topDark;for(let y=-73;y<-49;y+=6)g.fillRect(-.6,y,1.2,1.2);
@@ -266,6 +273,12 @@ function genS2(kind,R){
     return s;
   }
   if(kind==='dress')return {sex:'f',skin:pick(SKINS),hairCol:pick(HAIRC),top:'dress',topCol:pick(DRESS),hair:pick(['long','bun']),shoe:pick(['#111111','#6a0d1d','#c9a25a'])};
+  if(kind==='party'){ // 파티 손님: 원색 무늬 반팔 셔츠 / 반짝이 원색 드레스 (검은 조끼 바텐더와 확실히 구분)
+    const f=R()<.5,s={sex:f?'f':'m',party:true,skin:pick(SKINS),hairCol:pick(HAIRC),topCol:pick(['#e0306a','#20a8b0','#e09a20','#8a40d8','#30b060','#e05028'])};
+    if(f){s.top='dress';s.sparkle=true;s.hair=pick(['long','bun']);s.shoe=pick(['#111111','#c9a25a','#d8d8d8'])}
+    else{s.top='party';s.topDark=shade(s.topCol,.65);s.pants=pick(['#d8d4cc','#e8e0d0','#3a3a48']);s.shoe=pick(['#d8d8d8','#3a2418']);s.hair=pick(['short','slick'])}
+    return s;
+  }
   const f=R()<.5,s={sex:f?'f':'m',skin:pick(SKINS),hairCol:pick(HAIRC)};
   s.hair=pick(f?['long','bun','short']:['short','slick','bald']);
   if(kind==='staff'){s.staff=true;s.top='vest';s.topCol=pick(['#0e0e10','#1a0c10']);s.shirt='#e8e6e0';s.pants='#0e0e10';s.shoe='#0a0a0a';return s}
@@ -314,10 +327,11 @@ const STAGES=[
     rule:'드레스코드 — 남자는 정장, 여자는 드레스',
     intro:['마르코스… 드디어 찾았다.','놈은 이 거리 끝, 저 클럽 안에 있다.','내 얼굴을 이렇게 만든 대가를, 오늘 밤 치르게 해주지.','하지만 이 꼴로는 문 앞에서 쫓겨나겠지.','일단 옷부터 바꿔 입어야겠군.']},
   {name:'클럽 내부',place:'club',pass:45,gen:genS2,
-    segs:[{staff:4,dress:3,decoy:7},{staff:4,young:9},{old:4,young:9}],
+    segs:[{staff:4,party:10},{staff:4,young:9},{old:4,young:9}],noCall:true,phaseGap:2,
+    phaseLines:[['마르코스는 보스 룸에 있을 거야.','바를 거쳐야 하니 직원의 모습이 필요해.'],['마피아들이 있는 복도를 지나야 해.','마피아 모습이 필요해.'],['보스 룸이 저기 보여.','보스 측근의 얼굴로 변신해야 해.']],
     checks:[CHECKS.bar,CHECKS.staff,CHECKS.boss],
     rule:'바 입구 — 직원(바텐더) · 복도 입구 — 젊은 마피아 부하 · 계단 입구 — 나이 든 마피아 부하(회색 머리)',
-    intro:['들어왔다.','마르코스는 보스 방에 있을 거야.','바, 복도, 계단… 가는 길마다 지키는 놈들이 있겠지.','그때그때 어울리는 얼굴이 필요해.','마르코스 똘마니를 일단 찾아보자.']},
+    },
   {name:'보스 방',place:'boss',boss:true,rule:'화면에 뜨는 키를 눌러 경호원을 쳐내고, SPACE 연타로 마르코스를 삼켜라'},
   {name:'탈출',place:'escape',pass:34,gen:genS4,patrols:true,
     segs:[{police:4,mafia:4,staff:3,guest:2},{guest:6,police:4,staff:2,mafia:2}],
@@ -328,7 +342,10 @@ const STAGES=[
 const STG=()=>STAGES[G.si];
 
 // 구간마다 NPC를 2~4명 팀으로 나눠 배치하고, 각 NPC가 플레이어에게 닿는 시각(ta)과 검문 시점을 계산
+// 판마다 NPC 번호를 새로 매김 (같은 번호를 쓰면 이전 판의 그림이 캐시에서 나와 고른 모습과 저장된 모습이 달라짐)
+let GAME_NO=0;
 function buildStage(st,R){
+  GAME_NO++;for(const k of FR.keys())if(k.startsWith('n')||k.startsWith('por|n'))FR.delete(k);
   const list=[],sig=new Set(),checks=[];
   let idx=0,span=0;
   const segs=st.segs.map(seg=>{
@@ -345,11 +362,12 @@ function buildStage(st,R){
   segs.forEach((sg,k)=>{
     sg.kinds.forEach((kind,j)=>{
       let s,key;do{s=st.gen(kind,R);key=JSON.stringify(s)}while(sig.has(key));
-      sig.add(key);s.id='s'+st.place+idx;
+      sig.add(key);s.id='n'+GAME_NO+'_'+idx;
       list.push({i:idx,spec:s,ta:start+sg.offs[j]/V,x:9999,saved:null});idx++});
     const J=start+sg.offs[sg.offs.length-1]/V+CFG.after; // 검문 시각 (NPC 시계)
     checks.push(Object.assign({},st.checks[k],{D:J-k*CFG.hold,ds:0,called:false})); // D: 전진 거리 시계 기준
-    start=J+CFG.hold+CFG.segGap;
+    // 다음 구간: 기본은 첫 NPC가 segGap초 뒤 플레이어에게 닿음, phaseGap이 있으면 통과 후 그 시간 뒤에 화면에 나타남
+    start=J+CFG.hold+(st.phaseGap!=null?st.phaseGap+(W+60-PX)/V:CFG.segGap);
   });
   return {list,checks,V};
 }
@@ -604,6 +622,7 @@ function newGame(si,state){
   // 돌발 순찰: 각 구간 중간쯤 (d = 전진 시계로 순찰이 플레이어 앞에 도착하는 때)
   G.patrols=st.patrols?[checks[0].D*.55,checks[0].D+(checks[1].D-checks[0].D)*.55].map(d=>({d,started:false,judged:false,done:false})):[];
   if(st.patrols)frames(PATROL,-1);
+  if(st.phaseLines)phaseTalk(0);
   if(AU.c){AU.rain.gain.value=st.place==='street'?.09:0;setClub(0,260)}
 }
 const keeperX=k=>PX+120+G.ground*(G.checks[k].D-G.d);
@@ -651,6 +670,13 @@ function clubAudio(){
   else if(G.place==='escape')setClub(0,260); // 음악은 멈췄고 사이렌만
   else{const w=clubWeights();setClub(.55*w.d+.4*w.b+.14*w.c,1700*w.d+900*w.b+320*w.c)}
 }
+// 구간이 시작될 때 플레이어가 말풍선으로 필요한 모습을 알려 줌
+function phaseTalk(k){const L=STG().phaseLines[k];G.sq=L?{t0:G.t,lines:L,i:0}:null}
+function phaseTalkUpdate(){
+  const q=G.sq;if(!q)return;
+  if(q.i<q.lines.length&&G.t-q.t0>=.4+q.i*3){say(q.lines[q.i],()=>G.end?G.end.px:PX,2.8);q.i++}
+  if(q.i>=q.lines.length)G.sq=null;
+}
 // 스테이지 시작 전 독백
 function startIntro(){G.state='intro';G.dlg={i:0,t:0}}
 function nextLine(){const D=G.dlg;D.i++;D.t=0;if(D.i>=STG().intro.length){G.state='play';G.dlg=null}}
@@ -671,7 +697,7 @@ function update(dt){
   G.t+=dt;
   if(G.hold){ // 검문 통과: 잠시 멈췄다가 다시 걸어감
     const h=G.hold;h.t+=dt;G.checks[h.k].ds=ease(clamp((h.t-.5)/.6,0,1));
-    if(h.t>=CFG.hold){G.hold=null;G.ck++;G.slots=[null,null,null,null];G.cool=0} // 구간이 바뀌면 저장 칸 초기화
+    if(h.t>=CFG.hold){G.hold=null;G.ck++;G.slots=[null,null,null,null];G.cool=0;if(STG().phaseLines)phaseTalk(G.ck)} // 구간이 바뀌면 저장 칸 초기화
   }else{G.d+=dt;G.scroll+=G.ground*dt}
   if(G.cool>0&&(G.cool-=dt)<=0){G.cool=0;if(G.slots.some(Boolean))sfx('ready')}
   for(const n of G.npcs){n.x=PX+G.V*(n.ta-G.t);if(n.flash)n.flash=Math.max(0,n.flash-dt)}
@@ -682,12 +708,13 @@ function update(dt){
   if(!G.cur&&sel.length)G.cur=sel[0];
   // 검문하는 사람이 보이면 조건을 외침
   const c=G.checks[G.ck];
-  if(c&&!c.called&&keeperX(G.ck)<W+40&&!G.patrols.some(p=>p.started&&!p.judged)){c.called=true;const k=G.ck;say(c.call,()=>keeperX(k),3.6);sfx('call')} // 화면에 들어오자마자 외침
+  if(c&&!c.called&&!STG().noCall&&keeperX(G.ck)<W+40&&!G.patrols.some(p=>p.started&&!p.judged)){c.called=true;const k=G.ck;say(c.call,()=>keeperX(k),3.6);sfx('call')} // 화면에 들어오자마자 외침
   // 진흙이 굳음: 일정 시간이 지나면 균열, 더 지나면 변장이 무너짐
   if(!STG().noHarden&&G.look!==PLAYER&&!G.morph){G.hard+=dt;
     if(G.hard>=CFG.harden&&!G.crackWarned){G.crackWarned=true;toast('얼굴이 굳기 시작한다 — 다시 빚어야 해');sfx('crack')}
     if(G.hard>=CFG.crumble){setLook(PLAYER);toast('변장이 무너졌다!');sfx('crumble')}}
   clubAudio();
+  if(G.sq)phaseTalkUpdate();
   if(HP.has('bot'))bot(dt);
   if(G.patrols.length&&patrolUpdate())return;
   if(!G.hold&&c&&G.d>=c.D){G.d=c.D;judge()}
@@ -894,8 +921,7 @@ function drawWorld(){
   drawPlayer(px,moving?G.clock*G.pRate:0,E?E.alpha:1);
   // 선택 표시
   if(G.cur&&G.state==='play'){const x=G.cur.x,y=GY-306;
-    ctx.fillStyle='#ff3a4a';ctx.font='15px '+FONT;ctx.textAlign='center';ctx.fillText(G.cur.saved?'CHOICE · '+G.cur.saved:'CHOICE',x,y-8);
-    ctx.beginPath();ctx.moveTo(x-10,y);ctx.lineTo(x+10,y);ctx.lineTo(x,y+12);ctx.closePath();ctx.fill()}
+    ctx.fillStyle='#ff3a4a';ctx.beginPath();ctx.moveTo(x-13,y-4);ctx.lineTo(x+13,y-4);ctx.lineTo(x,y+12);ctx.closePath();ctx.fill()}
   if(G.bubble)drawBubble(G.bubble.at(),GY-322,G.bubble.text);
 }
 function drawPlayer(x,phase,alpha=1){
@@ -979,7 +1005,8 @@ function drawUI(){
   ctx.fillStyle='#ff3a4a';ctx.beginPath();ctx.arc(260+440*prog,34.5,6.5,0,Math.PI*2);ctx.fill();
   // 하단 칸
   ctx.fillStyle='rgba(0,0,0,.62)';ctx.fillRect(0,418,W,H-418);
-  const sz=92,gap=16,x0=W/2-(4*sz+3*gap)/2,y=432;
+  // 왼쪽 SPACE 묶음과 오른쪽 A S D F 칸이 화면 양쪽에 대칭으로 놓임
+  const sz=92,gap=16,MG=32,x0=W-MG-(4*sz+3*gap),y=432;
   KEYS.forEach((k,i)=>{const x=x0+i*(sz+gap),spec=G.slots[i];
     ctx.fillStyle='rgba(255,255,255,.05)';ctx.fillRect(x,y,sz,sz);
     if(spec){const p=portrait(spec);ctx.save();ctx.beginPath();ctx.rect(x,y,sz,sz);ctx.clip();ctx.drawImage(p,x+sz/2-p.width/2,y+6);
@@ -995,12 +1022,12 @@ function drawUI(){
       ctx.fillStyle=cr?'#ff9060':'#ff3a4a';ctx.font='12px '+FONT;ctx.textAlign='right';ctx.fillText(cr?'굳는 중':'변신 중',x+sz-6,y+sz-13)}
   });
   // 왼쪽: 모습 저장 아이콘 + SPACE 키
-  {const ix=74,iy=478,kx=120,ky=462;
+  {const ix=MG+40,iy=478,kx=MG+92,kw=4*sz+3*gap-92,ky=y+18;
     ctx.strokeStyle='#e8d8d8';ctx.lineWidth=2;ctx.setLineDash([3,3]);ctx.beginPath();ctx.arc(ix-12,iy-6,9,0,Math.PI*2);ctx.moveTo(ix-25,iy+16);ctx.quadraticCurveTo(ix-12,iy+1,ix+1,iy+16);ctx.stroke();ctx.setLineDash([]);
     ctx.fillStyle='#e8d8d8';ctx.beginPath();ctx.arc(ix+12,iy-6,9,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.moveTo(ix-1,iy+16);ctx.quadraticCurveTo(ix+12,iy+1,ix+25,iy+16);ctx.closePath();ctx.fill();
-    ctx.fillStyle='rgba(255,255,255,.08)';ctx.strokeStyle='rgba(255,255,255,.5)';ctx.lineWidth=1.5;ctx.beginPath();ctx.roundRect(kx,ky,120,32,6);ctx.fill();ctx.stroke();
-    ctx.fillStyle='#fff';ctx.font='bold 15px '+FONT;ctx.textAlign='center';ctx.fillText('SPACE',kx+60,ky+21)}
-  if(G.cool>0){ctx.font='14px '+FONT;ctx.textAlign='right';ctx.fillStyle='#ff3a4a';ctx.fillText('변신 쿨타임 '+G.cool.toFixed(1)+'초',W-20,484)}
+    ctx.fillStyle='rgba(255,255,255,.08)';ctx.strokeStyle='rgba(255,255,255,.5)';ctx.lineWidth=1.5;ctx.beginPath();ctx.roundRect(kx,ky,kw,56,8);ctx.fill();ctx.stroke();
+    ctx.fillStyle='#fff';ctx.font='bold 17px '+FONT;ctx.textAlign='center';ctx.fillText('SPACE',kx+kw/2,ky+34);
+    if(G.cool>0){ctx.font='13px '+FONT;ctx.fillStyle='#ff3a4a';ctx.fillText('변신 쿨타임 '+G.cool.toFixed(1)+'초',kx+kw/2,y+sz+4)}}
   if(G.toast){ctx.globalAlpha=clamp(G.toast.t/.4,0,1);ctx.font='16px '+FONT;ctx.textAlign='center';ctx.fillStyle='#ffb0b8';ctx.fillText(G.toast.text,W/2,66);ctx.globalAlpha=1}
 }
 // ? 버튼과 도움말 창, 소리 버튼
