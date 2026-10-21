@@ -64,10 +64,6 @@ function person(g,p,ph){
     if(t==='tee')P(g,p.topCol,RR(g,-3.5,-2,7,10,3));
     if(t==='track')P(g,p.stripe,RR(g,s>0?2:-3,0,1,28,0));
     P(g,skin,EL(g,0,30.5,3.4,3.8));
-    if(p.gun&&s===d){
-      P(g,'#6a6a72',PL(g,[-d*2,26,d*12,26,d*12,29.8,d*3,29.8,d*2,35.5,-d*1.5,35.5]));
-      P(g,'#a4a4ac',RR(g,d>0?1:-12,26,11,.9,0));
-      P(g,skin,EL(g,0,30.5,3.4,3.8))}
     g.restore()};
   arm(-1,-la*.7);arm(1,la*.7);
   // 몸통
@@ -90,6 +86,12 @@ function person(g,p,ph){
     if(p.tie)P(g,p.tie,PL(g,[-1.4,-79,1.4,-79,2,-67,0,-63,-2,-67]));
     else P(g,skin,PL(g,[-2,-80,2,-80,0,-76]));
     P(g,p.topDark,PL(g,[-5,-80,-1,-65,-7,-72]));P(g,p.topDark,PL(g,[5,-80,1,-65,7,-72]));
+  }
+  if(p.gun){ // 허리춤 권총집과 은색 손잡이
+    const hx=d>0?6.5:-12.5;
+    P(g,'#4a2c18',RR(g,hx,-51,6,13,1.5));
+    P(g,'#d0d0d8',RR(g,hx+1,-57.5,4,7.5,1));
+    P(g,'#8a8a92',RR(g,hx+1.5,-52,3,1,0));
   }
   if(t==='shirt'){
     P(g,skin,PL(g,[-2.5,-81,2.5,-81,0,-76]));
@@ -191,6 +193,16 @@ function portrait(spec){
 }
 let MON=null;
 const monSprite=()=>MON||(MON=sprite(monster,200,192,1.75,monFace));
+// 2스테이지 끝에서는 괴물을 검게 흐린 실루엣으로만 보여줌 (3스테이지에서 처음 공개)
+let MONB=null;
+function monBlur(){
+  if(MONB)return MONB;
+  const m=monSprite(),pad=30,c=mk(m.width+pad*2,m.height+pad*2),g=c.getContext('2d');
+  g.filter='blur(12px)';g.globalAlpha=.45;g.drawImage(maskOf(m,'#ff2a3d'),pad+5,pad);
+  g.globalAlpha=1;g.filter='blur(9px)';g.drawImage(maskOf(m,'#030102'),pad,pad);
+  g.filter='blur(4px)';g.globalAlpha=.85;g.drawImage(maskOf(m,'#020101'),pad,pad);
+  c.foot=m.foot+pad;return MONB=c;
+}
 
 // ================= NPC 생성 =================
 const SKINS=['#e2b48f','#d7a985','#b98560','#8d5a3b','#f0c9a8','#a8744f'];
@@ -245,9 +257,10 @@ const GUARD={id:'guard',sex:'m',mafia:true,top:'suit',topCol:'#0b0b0d',topDark:'
 const STAGES=[
   {name:'클럽 가는 길',place:'street',npc:20,valid:5,pass:30,gen:genS1,check:s=>s.top==='suit'||s.top==='dress',
     keeper:DOORMAN,rule:'드레스코드 — 남자는 정장, 여자는 드레스',
+    intro:['마르코스… 드디어 찾았다.','놈은 이 거리 끝, 저 클럽 안에 있다.','놈이 저지른 짓의 대가를 오늘 밤 치르게 해주지.','하지만 이 꼴로는 문 앞에서 쫓겨나겠지.','일단 옷부터 바꿔 입어야겠군.'],
     okLine:'들어가.',failLine:['그 꼴로는 못 들어가.','드레스코드 위반이다. 꺼져.'],over:'입장 거부 — 드레스코드 위반'},
   {name:'클럽 내부',place:'club',npc:40,valid:8,pass:50,gen:genS2,check:s=>!!s.mafia,
-    keeper:GUARD,rule:'보스 방 — 마피아 부하만 올라갈 수 있다 (검은 정장, 얼굴 흉터·대머리·총)',
+    keeper:GUARD,intro:['들어왔다.','마르코스는 보스 방에 있을 거야.','보스 방으로 가려면 놈의 식구처럼 보여야 해.','마르코스 똘마니를 일단 찾아보자.'],rule:'보스 방 — 마피아 부하만 올라갈 수 있다 (검은 정장, 얼굴 흉터·대머리·총)',
     okLine:'올라가. 보스가 기다린다.',failLine:['넌 뭐야. 꺼져.','넌 우리 식구가 아니야.'],over:'정체가 들켰다 — 마피아 부하가 아니다'},
 ];
 const STG=()=>STAGES[G.si];
@@ -497,6 +510,7 @@ function update(dt){
   if(G.bubble&&(G.bubble.t-=dt)<=0)G.bubble=null;
   if(G.morph&&(G.morph.t+=dt)>=MORPH)G.morph=null;
   if(G.state==='title'){G.scroll+=60*dt;return}
+  if(G.state==='intro'){G.scroll+=G.ground*dt;clubAudio();if((G.dlg.t+=dt)>3.4)nextLine();return}
   if(G.state==='stairs')return stairsUpdate(dt);
   if(G.state!=='play'&&G.state!=='end')return;
   if(G.state==='play'){
@@ -508,11 +522,24 @@ function update(dt){
     const sel=selectable();
     if(G.cur&&!sel.includes(G.cur))G.cur=sel.find(n=>n.x>G.cur.x)||sel[0]||null;
     if(!G.cur&&sel.length)G.cur=sel[0];
-    if(G.place==='street')setClub(clamp(1-(keeperX()-PX)/900,0,1)*.35,260);
-    else{const w=clubWeights();setClub(.55*w.d+.4*w.b+.14*w.c,1700*w.d+900*w.b+320*w.c)}
+    clubAudio();
     if(HP.has('bot'))bot(dt);
     if(G.t>=G.tJudge){G.t=G.tJudge;judge()}
   }else endUpdate(dt);
+}
+function clubAudio(){
+  if(G.place==='street')setClub(clamp(1-(keeperX()-PX)/900,0,1)*.35,260);
+  else{const w=clubWeights();setClub(.55*w.d+.4*w.b+.14*w.c,1700*w.d+900*w.b+320*w.c)}
+}
+// 스테이지 시작 전 독백
+function startIntro(){G.state='intro';G.dlg={i:0,t:0}}
+function nextLine(){const D=G.dlg;D.i++;D.t=0;if(D.i>=STG().intro.length){G.state='play';G.dlg=null}}
+function drawIntro(){
+  const D=G.dlg,k=clamp(D.i===0?D.t/.5:1,0,1);
+  ctx.fillStyle='#000';ctx.fillRect(0,0,W,56*k);ctx.fillRect(0,H-118*k,W,118*k);
+  const line=STG().intro[D.i],a=clamp(D.t/.35,0,1);
+  ctx.globalAlpha=a;ctx.textAlign='center';ctx.font='22px '+FONT;ctx.fillStyle='#f0e6e6';ctx.fillText('“'+line+'”',W/2,H-58);
+  ctx.globalAlpha=.5;ctx.font='13px '+FONT;ctx.fillStyle='#c8b8b8';ctx.textAlign='right';ctx.fillText('Space ▶',W-24,H-22);ctx.globalAlpha=1;
 }
 function judge(){
   G.state='end';G.cur=null;
@@ -686,15 +713,15 @@ function drawStairs(){
   if(dx<W+100){const dg=ctx.createRadialGradient(dx+40,dy-100,5,dx+40,dy-100,220);dg.addColorStop(0,'rgba(255,60,50,.5)');dg.addColorStop(1,'rgba(255,60,50,0)');
     ctx.fillStyle=dg;ctx.fillRect(dx-200,dy-330,480,340);ctx.fillStyle='#030102';ctx.fillRect(dx,dy-210,84,210);ctx.fillStyle='#ff4a50';ctx.fillRect(dx+70,dy-110,6,6)}
   // 플레이어 → 괴물
-  const fi=Math.floor(((s/2)%1)*8),me=frames(G.look,1)[fi],mon=monSprite(),bob=-Math.abs(Math.sin(s*Math.PI))*4;
+  const fi=Math.floor(((s/2)%1)*8),me=frames(G.look,1)[fi],mon=monBlur(),bob=-Math.abs(Math.sin(s*Math.PI))*4;
   const fy=SY+bob,x=SX;
   if(t<2.2){const m=clamp((t-.6)/1.6,0,1);drawChar(me,x,{y:fy,mud:m*.55})}
   else if(t<3.8){const m=ease((t-2.2)/1.6),c=clamp((t-2.2)/.4,0,1),pulse=Math.sin(t*9)*.03;
     drawChar(me,x,{y:fy,base:1-c,mud:.55+.45*c,sx:1+.4*m+pulse,sy:1+.12*m-pulse})}
-  else if(t<5.2){const m=(t-3.8)/1.4,sc=.72+.28*ease(m);
-    drawChar(me,x,{y:fy,base:0,mud:Math.min(1,2-2*m),sx:1.4,sy:1.12});
-    drawChar(mon,x,{y:fy,base:0,mud:Math.min(1,2*m),sx:sc,sy:sc,shadow:false})}
-  else{const m=clamp((t-5.2)/1,0,1);drawChar(mon,x,{y:fy,mud:1-m})}
+  else{ // 진흙 덩어리가 검은 그림자 속으로 사라지며 거대한 형체만 남음
+    const m=clamp((t-3.8)/1.4,0,1),sc=.72+.28*ease(m),br=1+Math.sin(t*2.4)*.015;
+    if(m<1)drawChar(me,x,{y:fy,base:0,mud:1,alpha:1-m,sx:1.4,sy:1.12});
+    drawChar(mon,x,{y:fy,alpha:Math.min(1,m*1.5),sx:sc*br,sy:sc/br,shadow:false})}
   if(t>.8&&t<5.4)mudDrops(x,fy,((t-.8)%1.2)/1.2+.1,10+Math.floor(t*4),60+t*14,240+t*10);
   ctx.restore();
   ctx.drawImage(BG.vig,0,0);
@@ -741,7 +768,7 @@ function helpLines(){
   const st=STG();
   return [
     ['조작법 · 규칙',26,'#f0e6e6'],
-    ['복수할 상대는 클럽 안에 있다. 지나가는 사람들의 모습을 훔쳐 변장하고 잠입하라.',15,'#c8b8b8'],
+    ['복수할 상대 마르코스는 클럽 안에 있다. 지나가는 사람들의 모습을 훔쳐 변장하고 잠입하라.',15,'#c8b8b8'],
     ['',8],
     ['STAGE '+(G.si+1)+' '+st.name+' — '+st.rule,16,'#ffb0b8'],
     ['',8],
@@ -782,7 +809,8 @@ function render(){
   }
   if(S==='title'){
     ctx.textAlign='center';ctx.shadowColor='#ff2a3d';ctx.shadowBlur=30;ctx.fillStyle='#f0dcd0';ctx.font='bold 84px '+FONT;ctx.fillText('CLAYFACE',W/2,190);ctx.shadowBlur=0;
-  }else if(S==='play'||S==='end'||S==='paused'){
+  }else if(S==='intro')drawIntro();
+  else if(S==='play'||S==='end'||S==='paused'){
     drawUI();
     if(G.end&&G.end.fade){ctx.fillStyle=`rgba(0,0,0,${G.end.fade})`;ctx.fillRect(0,0,W,H)}
     if(G.end&&G.end.flash){ctx.fillStyle=`rgba(200,20,30,${G.end.flash*.45})`;ctx.fillRect(0,0,W,H)}
@@ -798,7 +826,7 @@ function render(){
 }
 
 // ================= 입력 =================
-function startStage(si){newGame(si,'play');bgmOn(true)}
+function startStage(si,intro){newGame(si,'play');if(intro)startIntro();bgmOn(true)}
 addEventListener('keydown',e=>{
   const c=e.code;
   if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Space'].includes(c))e.preventDefault();
@@ -807,8 +835,9 @@ addEventListener('keydown',e=>{
   const S=G.state;
   if(c==='KeyH'||c==='Slash'||(G.help&&c==='Escape')){if(S!=='stairs')toggleHelp();return}
   if(G.help)return;
-  if(S==='title'&&(c==='Space'||c==='Enter')){G.state='play';bgmOn(true);return}
-  if(S==='clear'&&G.si===0&&(c==='Space'||c==='Enter'))return startStage(1);
+  if(S==='title'&&(c==='Space'||c==='Enter')){startIntro();bgmOn(true);return}
+  if(S==='intro'){if(c==='Space'||c==='Enter')nextLine();if(c==='Escape'){G.state='play';G.dlg=null}return}
+  if(S==='clear'&&G.si===0&&(c==='Space'||c==='Enter'))return startStage(1,true);
   if((S==='clear'||S==='over'||S==='play')&&c==='KeyR')return startStage(G.si);
   if(S==='over'&&(c==='Space'||c==='Enter'))return startStage(G.si);
   if(S==='play'&&(c==='KeyP'||c==='Escape')){G.state='paused';bgmOn(false);return}
@@ -827,8 +856,9 @@ BG.far=makeLayer(5,'#1c0a12',110,280,false);BG.mid=makeLayer(9,'#11050a',160,330
 BG.dance=makeDance();BG.bar=makeBar();BG.corr=makeCorridor();BG.stair=makeStairwell();BG.fog=makeFog();BG.vig=makeVignette();
 newGame(clamp((+HP.get('stage')||1)-1,0,STAGES.length-1),HP.has('play')?'play':'title');
 if(HP.has('help'))G.help=true;
+if(HP.has('intro')){startIntro();G.dlg.i=+HP.get('intro')||0;G.dlg.t=1}
 if(HP.has('stairs')){G.look=G.npcs.find(n=>n.spec.mafia)?.spec||GUARD;startStairs()}
-if(HP.has('sim')){const T=+HP.get('sim');while(G.clock<T&&['play','end','stairs'].includes(G.state))update(1/60);document.title='SIM '+G.state;
+if(HP.has('sim')){const T=+HP.get('sim');while(G.clock<T&&['intro','play','end','stairs'].includes(G.state))update(1/60);document.title='SIM '+G.state;
   if(HP.has('morph')){onKey('Space');onKey('KeyA');if(G.morph)G.morph.t=+HP.get('morph')}}
 let last=performance.now();
 function loop(now){const dt=Math.min(.05,(now-last)/1000);last=now;if(G.state!=='paused'&&!G.help)update(dt);render();requestAnimationFrame(loop)}
