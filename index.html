@@ -1593,7 +1593,8 @@ if(HP.has('sim')){const T=+HP.get('sim');while(G.clock<T&&['intro','play','end',
   if(HP.has('morph')){onKey('Space');onKey('KeyA');if(G.morph)G.morph.t=+HP.get('morph')}
   if(HP.has('crack')){G.look=G.npcs[G.npcs.length-1].spec;frames(G.look,1);G.hard=+HP.get('crack')}}
 let last=performance.now();
-function loop(now){const dt=Math.min(.05,(now-last)/1000);last=now;if(G.state!=='paused'&&!G.help)update(dt);render();requestAnimationFrame(loop)}
+// 첫 프레임의 rAF 시각이 last보다 앞설 수 있어 dt가 음수가 되면 걷기 프레임 번호가 -1이 됨 → 0 아래로 내려가지 않게
+function loop(now){const dt=Math.max(0,Math.min(.05,(now-last)/1000));last=now;if(G.state!=='paused'&&!G.help)update(dt);render();requestAnimationFrame(loop)}
 if(HP.has('sim'))render();else requestAnimationFrame(loop);
 window.__G=()=>G;
 </script>
