@@ -12,7 +12,13 @@ canvas{width:min(100vw,calc(100vh*16/9));height:auto;display:block;background:#0
 </head>
 <body>
 <canvas id="c" width="960" height="540"></canvas>
-<script src="balance.js"></script>
+<script>
+// 시작이 막히면 검은 화면 대신 원인을 캔버스에 표시
+window.addEventListener('error',e=>{const x=document.getElementById('c').getContext('2d');x.fillStyle='#000';x.fillRect(0,0,960,540);x.fillStyle='#fff';x.font='18px sans-serif';
+  x.fillText('게임을 불러오지 못했어요. 새로고침(Ctrl+F5) 해 주세요.',40,250);x.fillStyle='#999';x.font='14px monospace';x.fillText(String(e.message).slice(0,110),40,285)});
+// Pages는 파일마다 10분씩 따로 캐시해서 배포 직후 index.html과 balance.js 버전이 어긋날 수 있음 → balance.js는 항상 새로 받음
+document.write('<script src="balance.js?v='+Date.now()+'"><\/script>');
+</script>
 <script>
 'use strict';
 // ================= 설정 =================

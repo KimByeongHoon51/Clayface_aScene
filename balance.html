@@ -47,7 +47,7 @@ input:focus,textarea:focus{outline:none;border-color:var(--accent)}
   <span id="status">불러오는 중…</span>
 </header>
 <main id="app"></main>
-<script src="balance.js"></script>
+<script>document.write('<script src="balance.js?v='+Date.now()+'"><\/script>')</script>
 <script>
 'use strict';
 const KEY='clayface_balance';
