@@ -20,10 +20,10 @@ const HP=new URLSearchParams(location.hash.slice(1));
 const CFG={
   spacing:105,     // 팀 안 NPC 간격(px)
   teamGap:210,     // 팀 사이 간격(px)
-  lead:1.2,        // 시작 후 첫 NPC 등장까지(초)
-  after:3,         // 구간의 마지막 NPC가 지나간 뒤 검문까지(초)
-  hold:1.8,        // 검문 통과 후 멈춰 있는 시간(초)
-  segGap:2.5,      // 검문 통과 후 다음 구간 첫 NPC가 플레이어에게 닿기까지(초)
+  lead:1.1,        // 시작 후 첫 NPC 등장까지(초)
+  after:2.7,       // 구간의 마지막 NPC가 지나간 뒤 검문까지(초)
+  hold:1.6,        // 검문 통과 후 멈춰 있는 시간(초)
+  segGap:2.25,     // 검문 통과 후 다음 구간 첫 NPC가 플레이어에게 닿기까지(초)
   cool:3,          // 변신 쿨타임(초)
   harden:15,       // 변신 후 얼굴이 굳기 시작하는 시간(초)
   crumble:24,      // 변장이 무너지는 시간(초)
@@ -125,6 +125,12 @@ function person(g,p,ph){
   const e=Math.max(1.3,PXU);
   g.fillStyle='#1a1214';g.fillRect(d*1.8-3.6,-93,e,e);g.fillRect(d*1.8+2.4,-93,e,e);
   g.fillStyle='rgba(90,40,40,.8)';g.fillRect(d*1.8-1.6,-86.5,3.2,Math.max(.7,PXU));
+  if(p.old){ // 나이 든 얼굴: 이마·눈가 주름
+    g.strokeStyle='rgba(70,35,30,.75)';g.lineWidth=Math.max(.6,PXU);g.beginPath();
+    g.moveTo(d*.5-4,-97.2);g.lineTo(d*.5+4,-97.2);g.moveTo(d*.5-3,-95.6);g.lineTo(d*.5+3,-95.6);
+    g.moveTo(d*1.8-5.5,-91);g.lineTo(d*1.8-4,-90);g.moveTo(d*1.8+5.5,-91);g.lineTo(d*1.8+4,-90);g.stroke();
+  }
+  if(p.mustache)P(g,p.hairCol,PL(g,[d*1.8-3.6,-88,d*1.8+3.6,-88,d*1.8+3,-86.6,d*1.8-3,-86.6]));
   if(p.scar){ // 눈가를 가로지르는 흉터
     const sx=d*1.8+(d>0?2.2:-4.6);
     g.strokeStyle='#ffc4c4';g.lineWidth=Math.max(1.1,PXU*1.3);g.beginPath();g.moveTo(sx-1.2,-98);g.lineTo(sx+2.8,-87.5);g.stroke();
@@ -141,7 +147,8 @@ function person(g,p,ph){
   if(h==='slick')P(g,hc,PL(g,[-8.2,-92,-8.5,-98,-3,-102.5,5,-102,8.5,-97,8.2,-92,7,-97.5,-6.5,-97]));
   if(h==='long')P(g,hc,PL(g,[-9.5,-84,-9.5,-98,-4,-103,4,-103,9.5,-98,9.5,-84,7.5,-95,1,-98,-7.5,-93]));
   if(h==='bun'){P(g,hc,PL(g,[-8.4,-90,-8.6,-98,-4,-102.5,4,-102.5,8.6,-98,8.4,-90,7,-96,-7,-96]));P(g,hc,EL(g,-d*4,-103,4.2,3.8))}
-  if(h==='bald')P(g,'rgba(255,255,255,.16)',EL(g,-2,-98,3.4,1.8));
+  if(h==='bald'){P(g,'rgba(255,255,255,.16)',EL(g,-2,-98,3.4,1.8));
+    if(p.old){P(g,hc,RR(g,-8.4,-96,2.4,7,1));P(g,hc,RR(g,6,-96,2.4,7,1))}} // 회색 옆머리
   if(p.hat==='beanie'){P(g,p.hatCol,PL(g,[-8.6,-95,-8,-101,-3,-105,3,-105,8,-101,8.6,-95]));P(g,shade(p.hatCol,.7),RR(g,-8.8,-97.5,17.6,3,1))}
   if(p.hat==='bcap'){P(g,p.hatCol,PL(g,[-8.4,-96,-8,-101,-3,-104.5,3,-104.5,8,-101,8.4,-96]));P(g,p.hatCol,EL(g,d*7,-96.5,7,1.6))}
   if(p.hat==='cap'){P(g,'#1d2a48',PL(g,[-8.5,-98,8.5,-98,10.5,-106,-10.5,-106]));P(g,'#0a0a0e',EL(g,d*5,-97.8,8.5,1.8));P(g,'#d4b045',EL(g,0,-102,1.8,1.8))}
@@ -243,15 +250,16 @@ function genS1(kind,R){
   }
   return s;
 }
-// 2스테이지: staff(바텐더) · mafia(검은 정장 + 흉터·대머리·총) · dress(드레스 손님) · decoy(셔츠 차림 손님)
+// 2스테이지: staff(바텐더) · young/old(젊은·나이 든 마피아 부하, 검은 정장) · dress(드레스 손님) · decoy(셔츠 차림 손님)
+// 나이 든 부하는 회색 머리(또는 회색 옆머리의 대머리)와 주름, 절반은 콧수염. 젊은 부하는 검은 머리이고 대머리가 없음
 function genS2(kind,R){
   const pick=pickR(R);
-  if(kind==='mafia'){
-    const s={sex:'m',mafia:true,skin:pick(SKINS),hairCol:pick(['#111111','#2a1d14','#3b2216']),top:'suit',
+  if(kind==='young'||kind==='old'){
+    const old=kind==='old',s={sex:'m',mafia:true,old,skin:pick(SKINS),top:'suit',
       topCol:'#0b0b0d',topDark:'#040405',shirt:'#1c1c22',pants:'#0b0b0d',shoe:'#050505'};
-    s.gun=R()<.75;const bald=R()<.45;s.scar=R()<.5;
-    if(!s.gun&&!bald&&!s.scar)s.scar=true;
-    s.hair=bald?'bald':pick(['slick','short']);
+    s.gun=R()<.6;s.scar=R()<.4;
+    if(old){s.hairCol=pick(['#a8a8ac','#c8c8cc','#8a8a8e']);s.hair=pick(['slick','short','bald']);s.mustache=R()<.55}
+    else{s.hairCol=pick(['#111111','#2a1d14','#3b2216']);s.hair=pick(['slick','short'])}
     return s;
   }
   if(kind==='dress')return {sex:'f',skin:pick(SKINS),hairCol:pick(HAIRC),top:'dress',topCol:pick(DRESS),hair:pick(['long','bun']),shoe:pick(['#111111','#6a0d1d','#c9a25a'])};
@@ -276,17 +284,18 @@ const CHECKS={
     ok:'수고해. 들어가.',fail:['손님은 들어갈 수 없어.','직원 말고는 출입이 안 돼.'],over:'바 출입 거부 — 직원이 아니다'},
   staff:{keeper:STAFFG,gate:'gstaff',check:s=>!!s.staff,call:'여기부터 직원 전용이다.',
     ok:'늦었어. 빨리 들어가.',fail:['넌 뭐야. 나가.','직원 외 출입 금지야.'],over:'직원 통로 출입 거부 — 직원이 아니다'},
-  boss:{keeper:GUARD,gate:'stair',check:s=>!!s.mafia,call:'보스 방은 식구만 올라간다.',
-    ok:'올라가. 보스가 기다린다.',fail:['넌 뭐야. 꺼져.','넌 우리 식구가 아니야.'],over:'정체가 들켰다 — 마피아 부하가 아니다'},
+  boss:{keeper:GUARD,gate:'stair',check:s=>!!s.old,call:'보스 방은 고참만 올라간다.',
+    ok:'올라가. 보스가 기다린다.',fail:['넌 뭐야. 꺼져.','넌 우리 식구가 아니야.'],failYoung:'애송이는 못 올라가.',over:'정체가 들켰다 — 고참 마피아가 아니다'},
 };
+// 1스테이지는 튜토리얼이라 진흙이 굳지 않음 (문지기까지 40초가 넘어 일찍 변신하면 무너져 버림)
 const STAGES=[
-  {name:'클럽 가는 길',place:'street',pass:30,gen:genS1,segs:[{valid:5,decoy:15}],checks:[CHECKS.club],
+  {name:'클럽 가는 길',place:'street',pass:27,gen:genS1,segs:[{valid:5,decoy:15}],checks:[CHECKS.club],noHarden:true,
     rule:'드레스코드 — 남자는 정장, 여자는 드레스',
     intro:['마르코스… 드디어 찾았다.','놈은 이 거리 끝, 저 클럽 안에 있다.','놈이 저지른 짓의 대가를 오늘 밤 치르게 해주지.','하지만 이 꼴로는 문 앞에서 쫓겨나겠지.','일단 옷부터 바꿔 입어야겠군.']},
-  {name:'클럽 내부',place:'club',pass:50,gen:genS2,
-    segs:[{staff:3,mafia:3,dress:2,decoy:6},{staff:3,mafia:3,dress:2,decoy:5},{staff:2,mafia:2,dress:1,decoy:8}],
+  {name:'클럽 내부',place:'club',pass:45,gen:genS2,
+    segs:[{staff:4,dress:3,decoy:7},{staff:4,young:9},{old:4,young:9}],
     checks:[CHECKS.bar,CHECKS.staff,CHECKS.boss],
-    rule:'바 입구 · 복도 입구 — 직원(바텐더) · 계단 입구 — 마피아 부하',
+    rule:'바 입구 · 복도 입구 — 직원(바텐더) · 계단 입구 — 나이 든 마피아 부하(회색 머리)',
     intro:['들어왔다.','마르코스는 보스 방에 있을 거야.','바, 복도, 계단… 가는 길마다 지키는 놈들이 있겠지.','그때그때 어울리는 얼굴이 필요해.','마르코스 똘마니를 일단 찾아보자.']},
   {name:'보스 방',place:'boss',boss:true,rule:'화면에 뜨는 키를 눌러 경호원을 쳐내고, SPACE 연타로 마르코스를 삼켜라'},
 ];
@@ -599,7 +608,7 @@ function update(dt){
   if(G.bubble&&(G.bubble.t-=dt)<=0)G.bubble=null;
   if(G.morph&&(G.morph.t+=dt)>=MORPH)G.morph=null;
   if(G.state==='title'){G.scroll+=60*dt;return}
-  if(G.state==='intro'){G.scroll+=G.ground*dt;clubAudio();if((G.dlg.t+=dt)>3.4)nextLine();return}
+  if(G.state==='intro'){G.scroll+=G.ground*dt;clubAudio();if((G.dlg.t+=dt)>3.1)nextLine();return}
   if(G.state==='stairs')return stairsUpdate(dt);
   if(G.state==='boss')return bossUpdate(dt);
   if(G.state==='end')return endUpdate(dt);
@@ -607,7 +616,7 @@ function update(dt){
   G.t+=dt;
   if(G.hold){ // 검문 통과: 잠시 멈췄다가 다시 걸어감
     const h=G.hold;h.t+=dt;G.checks[h.k].ds=ease(clamp((h.t-.5)/.6,0,1));
-    if(h.t>=CFG.hold){G.hold=null;G.ck++}
+    if(h.t>=CFG.hold){G.hold=null;G.ck++;G.slots=[null,null,null,null];G.cool=0} // 구간이 바뀌면 저장 칸 초기화
   }else{G.d+=dt;G.scroll+=G.ground*dt}
   if(G.cool>0&&(G.cool-=dt)<=0){G.cool=0;if(G.slots.some(Boolean))sfx('ready')}
   for(const n of G.npcs){n.x=PX+G.V*(n.ta-G.t);if(n.flash)n.flash=Math.max(0,n.flash-dt)}
@@ -620,7 +629,7 @@ function update(dt){
   const c=G.checks[G.ck];
   if(c&&!c.called&&keeperX(G.ck)<W-90){c.called=true;const k=G.ck;say(c.call,()=>keeperX(k),2.8);sfx('call')}
   // 진흙이 굳음: 일정 시간이 지나면 균열, 더 지나면 변장이 무너짐
-  if(G.look!==PLAYER&&!G.morph){G.hard+=dt;
+  if(!STG().noHarden&&G.look!==PLAYER&&!G.morph){G.hard+=dt;
     if(G.hard>=CFG.harden&&!G.crackWarned){G.crackWarned=true;toast('얼굴이 굳기 시작한다 — 다시 빚어야 해');sfx('crack')}
     if(G.hard>=CFG.crumble){setLook(PLAYER);toast('변장이 무너졌다!');sfx('crumble')}}
   clubAudio();
@@ -633,7 +642,7 @@ function judge(){
   G.state='end';G.cur=null;
   G.end={ok,k,t:0,step:0,px:PX,alpha:1,fade:0,flash:0};
   if(ok)say(c.ok,at,1.4);
-  else{G.overMsg=c.over;say(G.look===PLAYER?c.fail[0]:c.fail[1],at,1.8)}
+  else{G.overMsg=c.over;say(G.look===PLAYER?c.fail[0]:c.failYoung&&G.look.mafia?c.failYoung:c.fail[1],at,1.8)}
 }
 function endUpdate(dt){
   const E=G.end;E.t+=dt;const t=E.t,stairs=G.place==='club',c=G.checks[E.k];
@@ -666,7 +675,7 @@ function startStairs(){
   G.st={t:0,s:0,step:0,roar:false};monBlur();setClub(.08,220);
 }
 function stairsUpdate(dt){
-  const S=G.st;S.t+=dt;
+  const S=G.st;S.t+=dt*1.1;dt*=1.1; // 진행 템포 10% 빠르게
   const climbing=S.t>.4&&S.t<6.9;
   if(climbing)S.s+=dt*1.75;
   if(climbing&&Math.floor(S.s)>S.step){S.step=Math.floor(S.s);sfx('step',clamp((S.t-.6)/5,0,1))}
@@ -852,7 +861,8 @@ function drawUI(){
     const on=spec&&spec===G.look;
     ctx.strokeStyle=on?'#ff3a4a':'rgba(255,255,255,.28)';ctx.lineWidth=on?3:1.5;ctx.strokeRect(x,y,sz,sz);
     ctx.fillStyle='#fff';ctx.font='bold 16px '+FONT;ctx.textAlign='left';ctx.fillText(k,x+7,y+19);
-    if(on){ // 굳기 막대: 회색 → 굳기 시작하면 붉은 갈색
+    if(on&&STG().noHarden){ctx.fillStyle='#ff3a4a';ctx.font='12px '+FONT;ctx.textAlign='right';ctx.fillText('변신 중',x+sz-6,y+sz-7)}
+    else if(on){ // 굳기 막대: 회색 → 굳기 시작하면 붉은 갈색
       const f=clamp(G.hard/CFG.crumble,0,1),cr=G.hard>=CFG.harden;
       ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(x+3,y+sz-9,sz-6,6);ctx.fillStyle=cr?'#c0603a':'#8a7a6a';ctx.fillRect(x+3,y+sz-9,(sz-6)*f,6);
       ctx.fillStyle=cr?'#ff9060':'#ff3a4a';ctx.font='12px '+FONT;ctx.textAlign='right';ctx.fillText(cr?'굳는 중':'변신 중',x+sz-6,y+sz-13)}
@@ -892,7 +902,8 @@ function helpLines(){
     ['P / Esc   일시정지      R   이 스테이지 처음부터      M   소리 켜기·끄기',14,'#e0d0d0'],
     ['',2],
     ['길을 막아선 사람 앞에 도착한 순간의 모습으로 통과가 결정된다 · 지나간 사람은 저장할 수 없다',13,'#a89898'],
-    ['변신하고 '+CFG.harden+'초가 지나면 얼굴이 굳기 시작해 '+CFG.crumble+'초에 무너진다 — 같은 키로 다시 빚을 수 있다',13,'#a89898'],
+    [st.noHarden?'':'변신하고 '+CFG.harden+'초가 지나면 얼굴이 굳기 시작해 '+CFG.crumble+'초에 무너진다 — 같은 키로 다시 빚을 수 있다',13,'#a89898'],
+    [st.checks&&st.checks.length>1?'검문을 지날 때마다 저장 칸이 비워진다':'',13,'#a89898'],
     ['칸이 다 차면 지울 수 없다 · 스테이지가 끝나면 변신이 풀리고 저장한 모습도 사라진다',13,'#a89898'],
     ['',2],
     ['? 또는 H 로 닫기',14,'#ff8090'],
@@ -1008,7 +1019,7 @@ function shootOnce(g){
   sfx('shot');sfx('hit');
 }
 function bossUpdate(dt){
-  const B=G.B;B.t+=dt;const t=B.t;
+  const B=G.B;B.t+=dt*(B.ph==='qte1'||B.ph==='qte2'?1:1.1);const t=B.t; // 조작 구간 외에는 10% 빠르게
   B.shake=Math.max(0,B.shake-dt*12);B.flick=Math.max(0,B.flick-dt);
   for(const a of[B.hits,B.shots,B.splinters])for(const h of a)h.t+=dt;
   B.hits=B.hits.filter(h=>h.t<.7);B.shots=B.shots.filter(s=>s.t<.07);B.splinters=B.splinters.filter(s=>s.t<1.6);
