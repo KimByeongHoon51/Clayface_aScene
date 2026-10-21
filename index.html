@@ -27,8 +27,6 @@ const CFG={
   cool:3,          // 변신 쿨타임(초)
   harden:15,       // 변신 후 얼굴이 굳기 시작하는 시간(초)
   crumble:24,      // 변장이 무너지는 시간(초)
-  susp:5,          // 원본과 마주쳤을 때 의심 게이지가 차는 시간(초)
-  suspDrop:1.5,    // 원본이 사라진 뒤 의심 게이지가 비는 시간(초)
   darken:.68,      // 실루엣 어둡기
 };
 const FONT='Georgia,"Batang","Nanum Myeongjo",serif';
@@ -241,7 +239,7 @@ function genS1(kind,R){
   }
   return s;
 }
-// 2스테이지: dress(드레스 여자) · staff(바텐더) · mafia(검은 정장 + 흉터·대머리·총) · decoy(셔츠 차림 손님)
+// 2스테이지: staff(바텐더) · mafia(검은 정장 + 흉터·대머리·총) · dress(드레스 손님) · decoy(셔츠 차림 손님)
 function genS2(kind,R){
   const pick=pickR(R);
   if(kind==='mafia'){
@@ -270,8 +268,8 @@ const GUARD={id:'guard',sex:'m',mafia:true,top:'suit',topCol:'#0b0b0d',topDark:'
 const CHECKS={
   club:{keeper:DOORMAN,gate:'club',check:s=>s.top==='suit'||s.top==='dress',call:'정장이나 드레스만 들어간다.',
     ok:'들어가.',fail:['그 꼴로는 못 들어가.','드레스코드 위반이다. 꺼져.'],over:'입장 거부 — 드레스코드 위반'},
-  bar:{keeper:BARMGR,gate:'gbar',check:s=>s.sex==='f'&&s.top==='dress',call:'오늘 밤 바는 레이디스 나이트예요!',
-    ok:'즐거운 밤 되세요.',fail:['손님은 들어갈 수 없어요.','오늘은 드레스 입은 여성분만 입장이에요.'],over:'바 입장 거부 — 오늘은 레이디스 나이트'},
+  bar:{keeper:BARMGR,gate:'gbar',check:s=>!!s.staff,call:'직원 말고는 출입이 안 돼.',
+    ok:'수고해. 들어가.',fail:['손님은 들어갈 수 없어.','직원 말고는 출입이 안 돼.'],over:'바 출입 거부 — 직원이 아니다'},
   staff:{keeper:STAFFG,gate:'gstaff',check:s=>!!s.staff,call:'여기부터 직원 전용이다.',
     ok:'늦었어. 빨리 들어가.',fail:['넌 뭐야. 나가.','직원 외 출입 금지야.'],over:'직원 통로 출입 거부 — 직원이 아니다'},
   boss:{keeper:GUARD,gate:'stair',check:s=>!!s.mafia,call:'보스 방은 식구만 올라간다.',
@@ -282,9 +280,9 @@ const STAGES=[
     rule:'드레스코드 — 남자는 정장, 여자는 드레스',
     intro:['마르코스… 드디어 찾았다.','놈은 이 거리 끝, 저 클럽 안에 있다.','놈이 저지른 짓의 대가를 오늘 밤 치르게 해주지.','하지만 이 꼴로는 문 앞에서 쫓겨나겠지.','일단 옷부터 바꿔 입어야겠군.']},
   {name:'클럽 내부',place:'club',pass:50,gen:genS2,
-    segs:[{dress:4,mafia:3,decoy:7},{staff:3,mafia:3,dress:1,decoy:6},{staff:2,mafia:2,decoy:9}],
+    segs:[{staff:3,mafia:3,dress:2,decoy:6},{staff:3,mafia:3,dress:2,decoy:5},{staff:2,mafia:2,dress:1,decoy:8}],
     checks:[CHECKS.bar,CHECKS.staff,CHECKS.boss],
-    rule:'바 입구 — 드레스 입은 여자 · 복도 입구 — 바텐더 · 계단 입구 — 마피아 부하',
+    rule:'바 입구 · 복도 입구 — 직원(바텐더) · 계단 입구 — 마피아 부하',
     intro:['들어왔다.','마르코스는 보스 방에 있을 거야.','바, 복도, 계단… 가는 길마다 지키는 놈들이 있겠지.','그때그때 어울리는 얼굴이 필요해.','마르코스 똘마니를 일단 찾아보자.']},
 ];
 const STG=()=>STAGES[G.si];
@@ -428,7 +426,7 @@ const AU={c:null};
 function audioInit(){
   if(AU.c){if(AU.c.state==='suspended')AU.c.resume();return}
   const c=new (window.AudioContext||window.webkitAudioContext)();AU.c=c;
-  AU.m=c.createGain();AU.m.gain.value=.85;const comp=c.createDynamicsCompressor();AU.m.connect(comp);comp.connect(c.destination);
+  AU.m=c.createGain();AU.m.gain.value=MUTED?0:.85;const comp=c.createDynamicsCompressor();AU.m.connect(comp);comp.connect(c.destination);
   AU.sfx=c.createGain();AU.sfx.connect(AU.m);
   const nb=c.createBuffer(1,c.sampleRate*2,c.sampleRate),nd=nb.getChannelData(0);for(let i=0;i<nd.length;i++)nd[i]=Math.random()*2-1;AU.nb=nb;
   const len=c.sampleRate*2.6,ir=c.createBuffer(2,len,c.sampleRate);
@@ -447,7 +445,7 @@ function audioInit(){
   // 클럽 음악 (거리에선 벽 너머로 먹먹하게, 안에서는 크게)
   AU.club=c.createGain();AU.club.gain.value=0;AU.clubF=c.createBiquadFilter();AU.clubF.type='lowpass';AU.clubF.frequency.value=260;
   AU.clubF.connect(AU.club);AU.club.connect(AU.m);
-  AU.next={beat:c.currentTime+.2,kick:c.currentTime+.2,bell:c.currentTime+4,tick:0};
+  AU.next={beat:c.currentTime+.2,kick:c.currentTime+.2,bell:c.currentTime+4};
   setInterval(schedule,100);
 }
 function osc(type,f,t0,dur,vol,dest,f2){
@@ -476,8 +474,6 @@ function schedule(){
   while(AU.next.bell<now+.3){const t=AU.next.bell;
     if(playing||G.state==='title'){const f=[392,415.3,369.99][Math.random()*3|0];osc('sine',f,t,3.2,.035,AU.wet);osc('sine',f*2.76,t,1.6,.012,AU.wet)}
     AU.next.bell+=6+Math.random()*4}
-  // 의심받는 중: 높은 경고음이 점점 빨라짐
-  if(playing&&G.susp>0&&G.orig&&now>AU.next.tick){osc('square',900+G.susp*500,now,.05,.035);AU.next.tick=now+.45-G.susp*.3}
 }
 function bgmOn(on){if(!AU.c)return;const t=AU.c.currentTime;AU.bgm.gain.cancelScheduledValues(t);AU.bgm.gain.setTargetAtTime(on?.5:0,t,on?.8:.4)}
 function setClub(gain,freq){if(!AU.c)return;AU.club.gain.value=gain;AU.clubF.frequency.value=freq}
@@ -495,7 +491,6 @@ const SFX={
   fail(){const t=AU.c.currentTime;for(const f of[55,58.3,82.4])osc('sawtooth',f,t,1.6,.09,AU.wet);noise(t,.6,.4,'lowpass',500,80)},
   clear(){const t=AU.c.currentTime;for(const f of[110,130.8,164.8,196])osc('sine',f,t,2.8,.07,AU.wet)},
   push(){const t=AU.c.currentTime;noise(t,.25,.4,'lowpass',600,100);osc('sine',90,t,.25,.3,AU.sfx,40)},
-  alarm(){const t=AU.c.currentTime;for(let i=0;i<3;i++){osc('sawtooth',620,t+i*.18,.14,.08);osc('sawtooth',465,t+i*.18+.09,.12,.06)}},
   crack(){const t=AU.c.currentTime;for(let i=0;i<5;i++)noise(t+i*.06+Math.random()*.03,.05,.12,'highpass',2500+Math.random()*2000,null,2)},
   crumble(){const t=AU.c.currentTime;noise(t,.9,.35,'lowpass',900,120,1,AU.wet);osc('sine',90,t,.6,.2,AU.sfx,40);this.crack()},
   step(k){const t=AU.c.currentTime;osc('sine',80-k*35,t,.18,.25+k*.45,AU.sfx,36);
@@ -514,7 +509,7 @@ function newGame(si,state){
   const {list,checks,V}=buildStage(st,rng(seed+si*977));
   G={si,place:st.place,state,seed,t:0,d:0,clock:0,scroll:0,npcs:list,V,checks,ck:0,hold:null,
     slots:[null,null,null,null],look:PLAYER,cool:0,cur:null,morph:null,toast:null,bubble:null,
-    hard:0,crackWarned:false,susp:0,orig:null,end:null,botT:0,help:false,st:null};
+    hard:0,crackWarned:false,end:null,botT:0,help:false,st:null};
   // 바닥은 NPC보다 느리게 흘러야 NPC가 플레이어 쪽으로 걸어오는 것처럼 보임 (한 걸음 주기 약 126px)
   G.ground=V*.5;G.npcRate=Math.max(.55,(V-G.ground)/126);G.pRate=Math.max(.55,G.ground/126);
   list.slice(0,6).forEach(n=>{frames(n.spec,-1);n.ready=true});frames(PLAYER,1);
@@ -597,10 +592,6 @@ function update(dt){
   if(G.look!==PLAYER&&!G.morph){G.hard+=dt;
     if(G.hard>=CFG.harden&&!G.crackWarned){G.crackWarned=true;toast('얼굴이 굳기 시작한다 — 다시 빚어야 해');sfx('crack')}
     if(G.hard>=CFG.crumble){setLook(PLAYER);toast('변장이 무너졌다!');sfx('crumble')}}
-  // 원본과 마주침: 내가 변신한 사람이 화면에 있으면 의심받음
-  G.orig=G.look===PLAYER?null:G.npcs.find(n=>n.spec===G.look&&n.x>-40&&n.x<W+40)||null;
-  if(G.orig)G.susp+=dt/CFG.susp;else G.susp=Math.max(0,G.susp-dt/CFG.suspDrop);
-  if(G.susp>=1)return caught();
   clubAudio();
   if(HP.has('bot'))bot(dt);
   if(!G.hold&&c&&G.d>=c.D){G.d=c.D;judge()}
@@ -609,14 +600,9 @@ function judge(){
   const k=G.ck,c=G.checks[k],ok=c.check(G.look),at=()=>keeperX(k)+c.ds*60;
   if(ok&&!lastCheck()){G.hold={k,t:0};say(c.ok,at,1.4);sfx('pass');return}
   G.state='end';G.cur=null;
-  G.end={ok,k,t:0,step:0,px:PX,alpha:1,fade:0,flash:0,push:true};
+  G.end={ok,k,t:0,step:0,px:PX,alpha:1,fade:0,flash:0};
   if(ok)say(c.ok,at,1.4);
   else{G.overMsg=c.over;say(G.look===PLAYER?c.fail[0]:c.fail[1],at,1.8)}
-}
-function caught(){
-  const o=G.orig;G.state='end';G.cur=null;G.overMsg='같은 얼굴이 둘 — 정체가 들켰다';
-  G.end={ok:false,k:G.ck,t:0,step:0,px:PX,alpha:1,fade:0,flash:0,push:false};
-  say('뭐야… 나랑 똑같이 생겼잖아?!',()=>o.x,1.8);sfx('alarm');
 }
 function endUpdate(dt){
   const E=G.end;E.t+=dt;const t=E.t,stairs=G.place==='club',c=G.checks[E.k];
@@ -636,11 +622,11 @@ function endUpdate(dt){
       if(t>3.6&&E.step===2){E.step=3;G.state='clear';sfx('clear');bgmOn(false)}
     }
   }else{
-    if(t>1.3&&E.step===0){E.step=1;sfx(E.push?'push':'fail');E.flash=1}
+    if(t>1.3&&E.step===0){E.step=1;sfx('push');E.flash=1}
     E.flash=Math.max(0,E.flash-dt*1.5);
-    if(t>1.3&&E.push)E.px=PX-ease(clamp((t-1.3)/.4,0,1))*70;
+    if(t>1.3)E.px=PX-ease(clamp((t-1.3)/.4,0,1))*70;
     if(t>1.9)E.fade=clamp((t-1.9)/.6,0,1)*.75;
-    if(t>2.2&&E.step===1){E.step=2;G.state='over';if(E.push)sfx('fail');bgmOn(false)}
+    if(t>2.2&&E.step===1){E.step=2;G.state='over';sfx('fail');bgmOn(false)}
   }
 }
 // 계단: 자동으로 오르며 괴물로 변함 (2스테이지 끝)
@@ -656,7 +642,7 @@ function stairsUpdate(dt){
   if(S.t>5.6&&!S.roar){S.roar=true;sfx('roar')}
   if(S.t>=STAIR_T){G.state='clear';sfx('clear');bgmOn(false)}
 }
-// 테스트용 자동 플레이 (#bot): 남은 검문에 필요한 모습을 모으고, 원본이 화면을 떠난 뒤 변신
+// 테스트용 자동 플레이 (#bot): 남은 검문에 필요한 모습을 모아 두었다가 검문 직전에 변신
 function bot(dt){
   if((G.botT-=dt)>0)return;G.botT=.12;
   const rem=G.checks.slice(G.ck),need=rem[0].check,sel=selectable();
@@ -666,10 +652,9 @@ function bot(dt){
   const target=sel.find(n=>!n.saved&&wanted(n.spec));
   if(target&&G.cur&&target!==G.cur)return onKey(target.x>G.cur.x?'ArrowRight':'ArrowLeft');
   if(G.cool>0)return;
-  const onScreen=s=>G.npcs.some(n=>n.spec===s&&n.x>-40&&n.x<W+40);
   const near=keeperX(G.ck)-PX<G.ground*7;
   if((near&&!need(G.look))||(G.hard>=CFG.harden&&need(G.look))){
-    const k=G.slots.findIndex(s=>s&&need(s)&&!onScreen(s));if(k>=0)onKey('Key'+KEYS[k])}
+    const k=G.slots.findIndex(s=>s&&need(s));if(k>=0)onKey('Key'+KEYS[k])}
 }
 
 // ================= 그리기 =================
@@ -735,16 +720,11 @@ function drawWorld(){
   for(const n of G.npcs){if(n.x<-80||n.x>W+80)continue;
     const fr=frames(n.spec,-1)[Math.floor(((G.t*G.npcRate+n.i*.37)%1)*8)];
     drawChar(fr,n.x,{mud:n.flash?n.flash*1.6:0});
-    if(n===G.orig){ // 나와 똑같이 생긴 원본: 의심 표시
-      ctx.font='bold 26px '+FONT;ctx.textAlign='center';ctx.fillStyle=G.susp>.6?'#ff3a4a':'#ffd060';ctx.fillText(G.susp>.6?'!':'?',n.x,GY-296)}
-    else if(n.saved&&!(n===G.cur&&G.state==='play')){ctx.font='bold 16px '+FONT;ctx.textAlign='center';ctx.fillStyle='rgba(255,255,255,.55)';ctx.fillText(n.saved,n.x,GY-300)}
+    if(n.saved&&!(n===G.cur&&G.state==='play')){ctx.font='bold 16px '+FONT;ctx.textAlign='center';ctx.fillStyle='rgba(255,255,255,.55)';ctx.fillText(n.saved,n.x,GY-300)}
   }
   // 플레이어
   const E=G.end,px=E?E.px:PX,moving=(G.state==='play'&&!G.hold)||(E&&E.ok&&E.t>1.1&&E.t<2.7);
   drawPlayer(px,moving?G.clock*G.pRate:0,E?E.alpha:1);
-  if(G.susp>0&&G.state==='play'){ // 의심 게이지
-    const bx=px-34,by=GY-312;ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(bx,by,68,7);ctx.fillStyle='#ff3a4a';ctx.fillRect(bx,by,68*G.susp,7);
-    ctx.font='13px '+FONT;ctx.textAlign='center';ctx.fillStyle='#ff8090';ctx.fillText('의심',px,by-5)}
   // 선택 표시
   if(G.cur&&G.state==='play'){const x=G.cur.x,y=GY-306;
     ctx.fillStyle='#ff3a4a';ctx.font='15px '+FONT;ctx.textAlign='center';ctx.fillText(G.cur.saved?'CHOICE · '+G.cur.saved:'CHOICE',x,y-8);
@@ -848,12 +828,23 @@ function drawUI(){
   if(G.cool>0){ctx.font='14px '+FONT;ctx.textAlign='right';ctx.fillStyle='#ff3a4a';ctx.fillText('변신 쿨타임 '+G.cool.toFixed(1)+'초',W-20,484)}
   if(G.toast){ctx.globalAlpha=clamp(G.toast.t/.4,0,1);ctx.font='16px '+FONT;ctx.textAlign='center';ctx.fillStyle='#ffb0b8';ctx.fillText(G.toast.text,W/2,66);ctx.globalAlpha=1}
 }
-// ? 버튼과 도움말 창
-const HB={x:W-34,y:30,r:16};
+// ? 버튼과 도움말 창, 소리 버튼
+const HB={x:W-34,y:30,r:16},SB={x:W-76,y:30,r:16};
 function drawHelpBtn(){
-  ctx.fillStyle='rgba(10,4,6,.7)';ctx.strokeStyle='rgba(255,90,110,.8)';ctx.lineWidth=1.5;
-  ctx.beginPath();ctx.arc(HB.x,HB.y,HB.r,0,Math.PI*2);ctx.fill();ctx.stroke();
+  for(const b of[HB,SB]){ctx.fillStyle='rgba(10,4,6,.7)';ctx.strokeStyle='rgba(255,90,110,.8)';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fill();ctx.stroke()}
   ctx.fillStyle='#f0e0e0';ctx.font='bold 18px '+FONT;ctx.textAlign='center';ctx.fillText('?',HB.x,HB.y+6);
+  // 스피커 모양 (꺼져 있으면 X)
+  const x=SB.x-6,y=SB.y;ctx.beginPath();ctx.moveTo(x-5,y-3.5);ctx.lineTo(x-1,y-3.5);ctx.lineTo(x+4,y-8);ctx.lineTo(x+4,y+8);ctx.lineTo(x-1,y+3.5);ctx.lineTo(x-5,y+3.5);ctx.closePath();ctx.fill();
+  ctx.strokeStyle='#f0e0e0';ctx.lineWidth=1.6;ctx.beginPath();
+  if(MUTED){ctx.moveTo(x+8,y-4);ctx.lineTo(x+15,y+4);ctx.moveTo(x+15,y-4);ctx.lineTo(x+8,y+4)}
+  else{ctx.arc(x+5,y,5,-.9,.9);ctx.moveTo(x+5+9*Math.cos(-.9),y+9*Math.sin(-.9));ctx.arc(x+5,y,9,-.9,.9)}
+  ctx.stroke();
+}
+let MUTED=false;try{MUTED=localStorage.getItem('clayface_mute')==='1'}catch(e){}
+function toggleMute(){
+  MUTED=!MUTED;try{localStorage.setItem('clayface_mute',MUTED?'1':'0')}catch(e){}
+  if(AU.c)AU.m.gain.setTargetAtTime(MUTED?0:.85,AU.c.currentTime,.05);
 }
 function helpLines(){
   const st=STG();
@@ -866,10 +857,9 @@ function helpLines(){
     ['← →   다가오는 사람 선택 (머리 위 CHOICE 표시)',14,'#e0d0d0'],
     ['Space   선택한 사람의 모습 저장 → A S D F 칸에 순서대로, 최대 4명',14,'#e0d0d0'],
     ['A S D F   저장한 모습으로 변신 · 쿨타임 3초',14,'#e0d0d0'],
-    ['P / Esc   일시정지      R   이 스테이지 처음부터',14,'#e0d0d0'],
+    ['P / Esc   일시정지      R   이 스테이지 처음부터      M   소리 켜기·끄기',14,'#e0d0d0'],
     ['',2],
     ['길을 막아선 사람 앞에 도착한 순간의 모습으로 통과가 결정된다 · 지나간 사람은 저장할 수 없다',13,'#a89898'],
-    ['변신한 사람의 원본이 화면에 있으면 의심받는다 — 원본이 지나간 뒤에 변신하라',13,'#a89898'],
     ['변신하고 '+CFG.harden+'초가 지나면 얼굴이 굳기 시작해 '+CFG.crumble+'초에 무너진다 — 같은 키로 다시 빚을 수 있다',13,'#a89898'],
     ['칸이 다 차면 지울 수 없다 · 스테이지가 끝나면 변신이 풀리고 저장한 모습도 사라진다',13,'#a89898'],
     ['',2],
@@ -907,6 +897,7 @@ function render(){
   }
   if(S==='title'){
     ctx.textAlign='center';ctx.shadowColor='#ff2a3d';ctx.shadowBlur=30;ctx.fillStyle='#f0dcd0';ctx.font='bold 84px '+FONT;ctx.fillText('CLAYFACE',W/2,190);ctx.shadowBlur=0;
+    ctx.globalAlpha=.45+.45*Math.sin(G.clock*3);ctx.font='18px '+FONT;ctx.fillStyle='#e8d8d8';ctx.fillText('PRESS SPACE TO START',W/2,300);ctx.globalAlpha=1;
   }else if(S==='intro')drawIntro();
   else if(S==='play'||S==='end'||S==='paused'){
     drawUI();
@@ -931,6 +922,7 @@ addEventListener('keydown',e=>{
   if(e.repeat)return;
   audioInit();
   const S=G.state;
+  if(c==='KeyM'){toggleMute();return}
   if(c==='KeyH'||c==='Slash'||(G.help&&c==='Escape')){if(S!=='stairs')toggleHelp();return}
   if(G.help)return;
   if(S==='title'&&(c==='Space'||c==='Enter')){startIntro();bgmOn(true);return}
@@ -945,6 +937,7 @@ addEventListener('keydown',e=>{
 cv.addEventListener('click',e=>{
   const r=cv.getBoundingClientRect(),x=(e.clientX-r.left)*W/r.width,y=(e.clientY-r.top)*H/r.height;
   audioInit();
+  if(Math.hypot(x-SB.x,y-SB.y)<=SB.r+6)return toggleMute();
   if(G.state!=='stairs'&&(G.help||Math.hypot(x-HB.x,y-HB.y)<=HB.r+6))toggleHelp();
 });
 addEventListener('blur',()=>{if(G.state==='play'){G.state='paused';bgmOn(false)}});
