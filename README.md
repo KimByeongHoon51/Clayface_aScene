@@ -2,7 +2,8 @@
 
 영화 「클레이페이스」의 한 장면을 오마주한 변장 러너 웹게임입니다.
 
-**플레이:** https://kimbyeonghoon51.github.io/Clayface_aScene/ · **밸런스 테이블:** https://kimbyeonghoon51.github.io/Clayface_aScene/balance.html
+**플레이:** https://kimbyeonghoon51.github.io/Clayface_aScene/ 
+**밸런스 테이블:** https://kimbyeonghoon51.github.io/Clayface_aScene/balance.html
 
 ## 개요
 | 항목 | 내용 |
