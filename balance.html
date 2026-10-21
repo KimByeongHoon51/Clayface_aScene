@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Clayface 밸런스 테이블</title>
+<style>
+:root{--bg:#0b0709;--panel:#150d10;--line:#2e1c22;--text:#eee4e6;--dim:#a8969a;--accent:#ff3a4a;--ok:#5ad08a;--warn:#ffb347}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 "Malgun Gothic","Apple SD Gothic Neo",sans-serif}
+header{position:sticky;top:0;z-index:5;background:rgba(11,7,9,.96);border-bottom:1px solid var(--line);padding:12px 20px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+header h1{font-size:17px;margin:0 16px 0 0;letter-spacing:.5px}
+button,select{background:#24161b;color:var(--text);border:1px solid #4a2c34;border-radius:6px;padding:7px 12px;font:inherit;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:bold}
+#status{margin-left:auto;color:var(--dim);font-size:13px}
+#status.dirty{color:var(--warn)}#status.saved{color:var(--ok)}
+main{max-width:1100px;margin:0 auto;padding:20px}
+section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin-bottom:18px}
+h2{font-size:16px;margin:0 0 4px}
+.desc{color:var(--dim);font-size:13px;margin:0 0 12px}
+table{border-collapse:collapse;width:100%}
+th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+th{color:var(--dim);font-weight:normal;font-size:12.5px;white-space:nowrap}
+input[type=number]{width:72px}
+input,textarea{background:#0e090b;color:var(--text);border:1px solid #3a2228;border-radius:5px;padding:5px 7px;font:inherit}
+input[type=text]{width:100%}
+textarea{width:100%;resize:vertical;min-height:54px}
+input:focus,textarea:focus{outline:none;border-color:var(--accent)}
+.total{font-weight:bold}
+.warn{color:var(--warn);font-size:12.5px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.field label{display:block;color:var(--dim);font-size:12.5px;margin-bottom:3px}
+.note{color:var(--dim);font-size:12.5px;margin-top:6px}
+@media (max-width:700px){.grid3{grid-template-columns:1fr}header{position:static}}
+</style>
+</head>
+<body>
+<header>
+  <h1>CLAYFACE · 밸런스 테이블</h1>
+  <button class="primary" id="save">저장 (이 브라우저)</button>
+  <select id="stagePick"><option value="1">STAGE 1</option><option value="2">STAGE 2</option><option value="3">STAGE 3</option><option value="4">STAGE 4</option></select>
+  <button id="play">게임에서 확인</button>
+  <button id="export">balance.js 내보내기</button>
+  <button id="importBtn">JSON 가져오기</button><input type="file" id="importFile" accept=".js,.json" hidden>
+  <button id="reset">기본값으로</button>
+  <span id="status">불러오는 중…</span>
+</header>
+<main id="app"></main>
+<script src="balance.js"></script>
+<script>
+'use strict';
+const KEY='clayface_balance';
+const DEF=JSON.parse(JSON.stringify(window.BALANCE_DEFAULT));
+// 스테이지마다 쓸 수 있는 NPC 종류와 표시 이름 (게임의 NPC 생성 코드와 같은 이름)
+const KINDS={
+  0:[['valid','정장·드레스 (통과)'],['decoy','평상복']],
+  1:[['staff','바텐더'],['party','파티 손님'],['young','젊은 마피아'],['old','나이 든 마피아'],['dress','드레스 손님'],['decoy','셔츠 손님']],
+  3:[['guest','민간인'],['police','경찰'],['mafia','마피아'],['staff','바텐더']],
+};
+// 구간마다 꼭 있어야 하는 종류 (없으면 그 검문을 통과할 방법이 없음)
+const NEED={0:[[['valid'],'정장·드레스']],1:[[['staff'],'바텐더'],[['young'],'젊은 마피아'],[['old'],'나이 든 마피아']],3:[[['police','guest'],'경찰이나 민간인'],[['police'],'경찰']]};
+const SEG_NAMES={0:['클럽 가는 길'],1:['댄스홀 → 바 입구','바 → 복도 입구','복도 → 계단 입구'],3:['복도·바 → 바 출구','댄스홀 → 정문']};
+const CHECK_ROWS=[
+  ['club','1 · 클럽 문지기',['call','ok','fail0','fail1','over']],
+  ['bar','2 · 바 입구 (바 매니저)',['ok','fail0','fail1','over']],
+  ['staff','2 · 복도 입구 (젊은 부하)',['ok','fail0','fail1','over']],
+  ['boss','2 · 계단 입구 (고참 경비원)',['ok','fail0','fail1','failYoung','over']],
+  ['police','4 · 바 출구 (경찰)',['ok','fail0','fail1','failMafia','over']],
+  ['cordon','4 · 정문 (경찰 경사)',['ok','fail0','fail1','failGuest','failMafia','over']],
+];
+const FIELD_NAMES={call:'다가올 때',ok:'통과',fail0:'원래 모습일 때',fail1:'다른 모습일 때',failYoung:'젊은 부하일 때',failMafia:'마피아일 때',failGuest:'민간인일 때',over:'GAME OVER 문구'};
+const BOSS_ROWS=[['calm','마르코스 (고요한 방)'],['laugh','연인'],['who','경호원 (문 두드림)'],['what','경호원 (괴물 등장)'],['plead','마르코스 (SPACE 연타 실패)'],['after','맷 (사이렌 뒤 독백)']];
+const TALK_NAMES=['마르코스','맷','마르코스','맷'];
+const PATROL_ROWS=[['stop','다가올 때'],['ok','통과'],['caughtPlayer','원래 모습이면'],['caughtMafia','마피아면']];
+
+let data;
+function load(){
+  data=JSON.parse(JSON.stringify(DEF));
+  try{const o=JSON.parse(localStorage.getItem(KEY)||'null');if(o)data=Object.assign(data,o,{cfg:Object.assign(data.cfg,o.cfg),checks:Object.assign(data.checks,o.checks),boss:Object.assign(data.boss,o.boss),patrol:Object.assign(data.patrol,o.patrol)})}catch(e){}
+}
+const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+const lines=a=>(a||[]).join('\n');
+const toLines=v=>v.split('\n').map(s=>s.trim()).filter(Boolean);
+
+function render(){
+  const s=data.stages,h=[];
+  h.push(`<section><h2>공통 수치</h2><p class="desc">모든 스테이지에 적용됩니다. 진흙 굳음은 2스테이지부터 적용돼요.</p><div class="grid3">
+    <div class="field"><label>변신 쿨타임 (초)</label><input type="number" step="0.5" min="0" data-path="cfg.cool" value="${data.cfg.cool}"></div>
+    <div class="field"><label>얼굴이 굳기 시작 (변신 후 초)</label><input type="number" step="0.5" min="1" data-path="cfg.harden" value="${data.cfg.harden}"></div>
+    <div class="field"><label>변장이 무너짐 (변신 후 초)</label><input type="number" step="0.5" min="2" data-path="cfg.crumble" value="${data.cfg.crumble}"></div></div></section>`);
+  for(const si of[0,1,3]){const st=s[si],kinds=KINDS[si];
+    h.push(`<section><h2>STAGE ${si+1} · ${esc(st.name)}</h2><p class="desc">NPC가 플레이어를 지나가는 시간과 구간별 NPC 수입니다. 구간마다 2명 이상 필요해요.</p>
+      <div class="field" style="margin-bottom:10px"><label>NPC 통과 시간 (초, 전체 NPC가 지나가는 데 걸리는 시간)</label><input type="number" min="5" step="1" data-path="stages.${si}.pass" value="${st.pass}"></div>
+      <table><tr><th>구간</th>${kinds.map(k=>`<th>${k[1]}</th>`).join('')}<th>합계</th><th></th></tr>`);
+    st.segs.forEach((seg,gi)=>{
+      h.push(`<tr><td>${gi+1}. ${SEG_NAMES[si][gi]||''}</td>${kinds.map(k=>`<td><input type="number" min="0" step="1" data-seg="${si}.${gi}.${k[0]}" value="${seg[k[0]]||0}"></td>`).join('')}<td class="total" id="tot${si}_${gi}"></td><td class="warn" id="warn${si}_${gi}"></td></tr>`)});
+    h.push(`<tr><td colspan="${kinds.length+1}" style="text-align:right;color:var(--dim)">스테이지 전체</td><td class="total" id="tot${si}"></td><td></td></tr></table>`);
+    if(st.intro)h.push(`<div class="field" style="margin-top:12px"><label>시작 독백 (한 줄에 한 문장, 영화식 자막으로 나옴)</label><textarea data-lines="stages.${si}.intro" rows="${Math.max(2,st.intro.length)}">${esc(lines(st.intro))}</textarea></div>`);
+    if(st.phaseLines)st.phaseLines.forEach((pl,gi)=>h.push(`<div class="field" style="margin-top:10px"><label>${gi+1}구간 시작 말풍선 (플레이어, 한 줄씩 4.4초 간격)</label><textarea data-lines="stages.${si}.phaseLines.${gi}" rows="2">${esc(lines(pl))}</textarea></div>`));
+    h.push(`</section>`);
+  }
+  h.push(`<section><h2>검문 대사</h2><p class="desc">'원래 모습일 때'는 금발 후드 차림으로 도착했을 때, '다른 모습일 때'는 조건에 맞지 않는 변장으로 도착했을 때입니다. 비워 두면 해당 대사가 나오지 않아요.</p><table><tr><th>검문</th><th>상황</th><th>대사</th></tr>`);
+  for(const [id,name,fields] of CHECK_ROWS)fields.forEach((f,i)=>h.push(`<tr>${i?'':`<td rowspan="${fields.length}">${name}</td>`}<td style="white-space:nowrap;color:var(--dim)">${FIELD_NAMES[f]}</td><td><input type="text" data-path="checks.${id}.${f}" value="${esc(data.checks[id][f])}"></td></tr>`));
+  h.push(`</table></section>`);
+  h.push(`<section><h2>STAGE 3 · 보스 방 대사</h2><p class="desc">대화 4줄은 마르코스와 맷(괴물)이 번갈아 말합니다.</p><table>`);
+  for(const [k,n] of BOSS_ROWS)h.push(`<tr><td style="white-space:nowrap;color:var(--dim)">${n}</td><td><input type="text" data-path="boss.${k}" value="${esc(data.boss[k])}"></td></tr>`);
+  data.boss.talk.forEach((t,i)=>h.push(`<tr><td style="white-space:nowrap;color:var(--dim)">대화 ${i+1} · ${TALK_NAMES[i]}</td><td><input type="text" data-talk="${i}" value="${esc(t)}"></td></tr>`));
+  h.push(`</table></section>`);
+  h.push(`<section><h2>STAGE 4 · 돌발 순찰 대사</h2><table>`);
+  for(const [k,n] of PATROL_ROWS)h.push(`<tr><td style="white-space:nowrap;color:var(--dim)">${n}</td><td><input type="text" data-path="patrol.${k}" value="${esc(data.patrol[k])}"></td></tr>`);
+  h.push(`</table></section>`);
+  h.push(`<section><h2>엔딩 독백</h2><p class="desc">물웅덩이 근접 장면에서 한 줄씩 2.7초 간격으로 나옵니다.</p><textarea data-lines="ending" rows="2">${esc(lines(data.ending))}</textarea></section>`);
+  document.getElementById('app').innerHTML=h.join('');
+  refreshTotals();
+}
+function setPath(path,val){const p=path.split('.');let o=data;for(let i=0;i<p.length-1;i++)o=o[p[i]];o[p[p.length-1]]=val}
+function refreshTotals(){
+  for(const si of[0,1,3]){let all=0;
+    data.stages[si].segs.forEach((seg,gi)=>{const t=Object.values(seg).reduce((a,b)=>a+(+b||0),0);all+=t;
+      document.getElementById(`tot${si}_${gi}`).textContent=t+'명';
+      const need=NEED[si][gi],w=[];if(t<2)w.push('2명 이상 필요');
+      if(need&&!need[0].some(k=>(seg[k]||0)>0))w.push(need[1]+'이(가) 없으면 통과 불가');
+      document.getElementById(`warn${si}_${gi}`).textContent=w.join(' · ')});
+    document.getElementById(`tot${si}`).textContent=all+'명'}
+}
+function dirty(){const s=document.getElementById('status');s.textContent='저장하지 않은 변경이 있어요';s.className='dirty'}
+document.addEventListener('input',e=>{const t=e.target;
+  if(t.dataset.path){const num=t.type==='number';setPath(t.dataset.path,num?(+t.value||0):t.value)}
+  if(t.dataset.seg){const [si,gi,k]=t.dataset.seg.split('.');const v=Math.max(0,Math.round(+t.value||0));if(v)data.stages[si].segs[gi][k]=v;else delete data.stages[si].segs[gi][k];refreshTotals()}
+  if(t.dataset.lines){const p=t.dataset.lines.split('.');let o=data;for(let i=0;i<p.length-1;i++)o=o[p[i]];o[p[p.length-1]]=toLines(t.value)}
+  if(t.dataset.talk!=null)data.boss.talk[+t.dataset.talk]=t.value;
+  dirty();
+});
+function problems(){const out=[];for(const si of[0,1,3])data.stages[si].segs.forEach((seg,gi)=>{const t=Object.values(seg).reduce((a,b)=>a+b,0);if(t<2)out.push(`STAGE ${si+1} ${gi+1}구간: NPC 2명 이상 필요`)});return out}
+document.getElementById('save').onclick=()=>{
+  const p=problems();if(p.length){alert('저장할 수 없어요:\n'+p.join('\n'));return}
+  try{localStorage.setItem(KEY,JSON.stringify(data));const s=document.getElementById('status');s.textContent='저장됨 — 게임을 새로고침하면 적용돼요';s.className='saved'}catch(e){alert('이 브라우저에서는 저장할 수 없어요: '+e.message)}
+};
+document.getElementById('play').onclick=()=>window.open('index.html#stage='+document.getElementById('stagePick').value+'&play','_blank');
+document.getElementById('reset').onclick=()=>{if(!confirm('저장한 값을 지우고 balance.js 기본값으로 되돌릴까요?'))return;try{localStorage.removeItem(KEY)}catch(e){}load();render();const s=document.getElementById('status');s.textContent='기본값으로 되돌렸어요';s.className='saved'};
+document.getElementById('export').onclick=()=>{
+  const txt='// Clayface_aScene 밸런스·대사 기본값\n// balance.html에서 고친 뒤 [balance.js 내보내기]로 받은 파일로 이 파일을 바꾸면 모든 사람에게 적용됩니다.\nwindow.BALANCE_DEFAULT='+JSON.stringify(data,null,2)+';\n';
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/javascript'}));a.download='balance.js';a.click();URL.revokeObjectURL(a.href);
+};
+document.getElementById('importBtn').onclick=()=>document.getElementById('importFile').click();
+document.getElementById('importFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;
+  try{const txt=await f.text(),json=txt.slice(txt.indexOf('{'),txt.lastIndexOf('}')+1);data=JSON.parse(json);render();dirty()}catch(err){alert('파일을 읽지 못했어요: '+err.message)}
+  e.target.value=''};
+load();render();
+{let saved=false;try{saved=!!localStorage.getItem(KEY)}catch(e){}document.getElementById('status').textContent=saved?'이 브라우저에 저장한 값을 불러왔어요':'balance.js 기본값'}
+</script>
+</body>
+</html>

@@ -40,3 +40,7 @@
 - 효과음과 배경음은 Web Audio로 직접 합성했습니다.
 
 비상업적 팬 오마주 프로젝트입니다.
+
+## 밸런스 테이블
+- `balance.html` — NPC 수·통과 시간·변신 수치와 모든 대사를 표에서 고칠 수 있는 편집 페이지 (https://kimbyeonghoon51.github.io/Clayface_aScene/balance.html)
+- [저장]하면 같은 브라우저의 게임에 바로 적용되고, [balance.js 내보내기]로 받은 파일을 저장소의 `balance.js`와 바꾸면 모든 사람에게 적용됩니다.
