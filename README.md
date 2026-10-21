@@ -31,7 +31,7 @@
 |---|---|---|
 | 1 클럽 가는 길 | 20명 · 27초 | 문지기의 드레스코드 — 남자는 정장, 여자는 드레스 |
 | 2 클럽 내부 | 40명 · 약 70초 | 검문 3번 — 바 입구: 직원(바텐더) · 복도 입구: 젊은 마피아 부하 · 계단 입구: 나이 든 마피아 부하(회색 머리). 검문을 지날 때마다 저장 칸 초기화 |
-| 3 보스 방 | 연출 약 45초 | 화면에 뜨는 키(A S D F)를 1.5초 안에 눌러 경호원 쳐내기 ×2, SPACE 연타로 덩치를 키워 한 명씩 한입에 삼키기 |
+| 3 보스 방 | 음원 길이(약 85초) | 경호원 웨이브 6번 — 키 하나·키 3개 순서·꾹 누르기·두 키 동시·연타·타이밍 링, SPACE 연타로 덩치를 키워 한 명씩 한입에 삼키기 |
 | 4 탈출 | 25명 · 약 55초 | 바 출구: 경찰이나 민간인 · 정문: 경찰만 · 돌발 순찰 2번: 마피아나 원래 모습이면 체포 |
 
 ## 만든 방식
@@ -44,3 +44,12 @@
 ## 밸런스 테이블
 - `balance.html` — NPC 수·통과 시간·변신 수치와 모든 대사를 표에서 고칠 수 있는 편집 페이지 (https://kimbyeonghoon51.github.io/Clayface_aScene/balance.html)
 - [저장]하면 같은 브라우저의 게임에 바로 적용되고, [balance.js 내보내기]로 받은 파일을 저장소의 `balance.js`와 바꾸면 모든 사람에게 적용됩니다.
+
+## 음악
+| 곡 | 사용 |
+|---|---|
+| "Clayface Theme" — Volker Bertelmann | STAGE 1 · 4 |
+| "Pretty No More" — Volker Bertelmann | STAGE 2 |
+| "Rebirth" — Volker Bertelmann | STAGE 3 |
+
+from *Clayface* (2026) Original Motion Picture Score · via YouTube "Thriller Soundtrack Music". 모든 음악의 저작권은 작곡가와 원 저작권자에게 있습니다.

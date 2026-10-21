@@ -538,36 +538,31 @@ function noise(t0,dur,vol,type,f,f2,q,dest){
   s.connect(fl);fl.connect(g);g.connect(dest||AU.sfx);s.start(t0,Math.random());s.stop(t0+dur+.05);
 }
 function schedule(){
-  const c=AU.c,now=c.currentTime,playing=G&&G.state==='play',inside=G&&G.place==='club';
+  const c=AU.c,now=c.currentTime,playing=G&&G.state==='play';
   const near=G&&G.checks&&G.checks[G.ck]?clamp(1-(keeperX(G.ck)-PX)/700,0,1):0;
   // 심장 박동: 검문하는 사람에게 가까워질수록 빨라짐
   while(AU.next.beat<now+.3){const t=AU.next.beat;
     if(playing){osc('sine',62,t,.18,.35,AU.sfx,38);osc('sine',58,t+.19,.16,.22,AU.sfx,36)}
     AU.next.beat+=playing?1.05-near*.45:1}
-  // 클럽 킥 (120bpm) + 안에서는 하이햇·베이스
-  while(AU.next.kick<now+.3){const t=AU.next.kick;osc('sine',115,t,.22,.9,AU.clubF,42);
-    if(inside&&G.state!=='stairs'){noise(t+.25,.05,.12,'highpass',7000,null,1,AU.clubF);osc('sawtooth',55,t+.25,.2,.12,AU.clubF)}
-    AU.next.kick+=.5}
+  // (클럽 음악·종소리·드론은 스테이지 음원으로 대체되어 쓰지 않음)
   if(G&&G.place==='escape'&&playing&&now>(AU.next.sir||0)){SFX.siren();AU.next.sir=now+7} // 탈출 중에는 사이렌이 계속
-  while(AU.next.bell<now+.3){const t=AU.next.bell;
-    if(playing||G.state==='title'){const f=[392,415.3,369.99][Math.random()*3|0];osc('sine',f,t,3.2,.035,AU.wet);osc('sine',f*2.76,t,1.6,.012,AU.wet)}
-    AU.next.bell+=6+Math.random()*4}
 }
-// 배경음악 파일: 폴더에 있으면 재생하고, 없거나 막히면 합성 배경음(드론)을 그대로 씀
-const MUSIC={main:'bgm_main.mp3',boss:'bgm_boss.mp3'},MUSIC_VOL=.45;
+// 스테이지 음원: 1·4 Clayface Theme / 2 Pretty No More / 3 Rebirth (Volker Bertelmann). 3스테이지 곡은 한 번만 재생
+const MUSIC={s14:'bgm_stage14.mp3',s2:'bgm_stage2.mp3',s3:'bgm_stage3.mp3'},MUSIC_VOL=.5;
 let BGMEL=null,BGMKEY=null,MUSIC_OK=false;
-function musicFor(si){return STAGES[si]&&STAGES[si].boss?'boss':'main'}
+function musicFor(si){return si===1?'s2':si===2?'s3':'s14'}
+function musicDone(){return !BGMEL||BGMEL.ended||(BGMEL.duration&&BGMEL.currentTime>=BGMEL.duration-.4)}
 function music(key){
   if(BGMKEY===key&&BGMEL)return;
   if(BGMEL){BGMEL.pause();BGMEL=null}MUSIC_OK=false;BGMKEY=key;if(!key)return;
-  const a=new Audio(MUSIC[key]);a.loop=true;a.volume=MUSIC_VOL;a.muted=MUTED;BGMEL=a;
+  const a=new Audio(MUSIC[key]);a.loop=key!=='s3';a.volume=MUSIC_VOL;a.muted=MUTED;BGMEL=a;
   a.addEventListener('playing',()=>{if(BGMEL===a){MUSIC_OK=true;bgmOn(true)}});
   a.addEventListener('error',()=>{if(BGMEL===a){BGMEL=null;MUSIC_OK=false;bgmOn(true)}});
   a.play().catch(()=>{});
 }
 function bgmOn(on){
   if(BGMEL){if(on)BGMEL.play().catch(()=>{});else BGMEL.pause()}
-  if(!AU.c)return;const t=AU.c.currentTime;AU.bgm.gain.cancelScheduledValues(t);AU.bgm.gain.setTargetAtTime(on&&!MUSIC_OK?.5:0,t,on?.8:.4) // 음악 파일이 나오면 드론은 끔
+  if(!AU.c)return;const t=AU.c.currentTime;AU.bgm.gain.cancelScheduledValues(t);AU.bgm.gain.setTargetAtTime(0,t,.4) // 합성 배경음(드론)은 쓰지 않음 — 음원으로 대체
 }
 function setClub(gain,freq){if(!AU.c)return;AU.club.gain.value=gain;AU.clubF.frequency.value=freq}
 const SFX={
@@ -604,6 +599,7 @@ const SFX={
     g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.06,t+.1);g.gain.setValueAtTime(.06,t+2);g.gain.exponentialRampToValueAtTime(.0001,t+2.8);
     o.connect(f);f.connect(g);g.connect(AU.wet);o.start(t);o.stop(t+2.9)},
   thunder(){const t=AU.c.currentTime+.35;noise(t,2.6,.35,'lowpass',500,60,1,AU.wet);osc('sine',42,t,2,.25,AU.sfx,28)},
+  glass(){const t=AU.c.currentTime;for(let i=0;i<8;i++)noise(t+i*.035+Math.random()*.03,.12,.18,'highpass',3000+Math.random()*3000,null,3,AU.wet);noise(t,.5,.25,'bandpass',2200,600,1,AU.wet)},
   chomp(){const t=AU.c.currentTime;noise(t,.08,.5,'bandpass',1400,600,2);osc('sine',80,t,.3,.6,AU.sfx,35);this.gulp()},
   gulp(){const t=AU.c.currentTime;osc('sine',110,t,.5,.6,AU.wet,35);noise(t,.6,.3,'lowpass',600,90,1,AU.wet)},
   siren(){const t=AU.c.currentTime,c=AU.c,o=c.createOscillator(),f=c.createBiquadFilter(),g=c.createGain();
@@ -680,11 +676,7 @@ function clubWeights(){
   const b=c0?clamp((G.d-c0.D-.4)/1.2,0,1):0,c=c1?clamp((G.d-c1.D-.4)/1.2,0,1):0;
   return {d:1-b,b:b-c,c};
 }
-function clubAudio(){
-  if(G.place==='street')setClub(clamp(1-(keeperX(0)-PX)/900,0,1)*.35,260);
-  else if(G.place==='escape')setClub(0,260); // 음악은 멈췄고 사이렌만
-  else{const w=clubWeights();setClub(.55*w.d+.4*w.b+.14*w.c,1700*w.d+900*w.b+320*w.c)}
-}
+function clubAudio(){setClub(0,260)} // 클럽 음악은 스테이지 음원으로 대체
 // 구간이 시작될 때 플레이어가 말풍선으로 필요한 모습을 알려 줌
 function phaseTalk(k){const L=STG().phaseLines[k];G.sq=L?{t0:G.t,lines:L,i:0}:null}
 function phaseTalkUpdate(){
@@ -1186,7 +1178,7 @@ function makeDesk(){
 }
 function bossInit(){return {ph:'calm',t:0,done:new Set(),monX:DOOR_X,monA:0,door:0,
   guards:[{spec:BG1,x:70,face:1,aim:false,fly:null},{spec:BG2,x:250,face:-1,aim:false,fly:null}],
-  gi:0,qkey:null,qt:0,qmax:1.5,qwait:.5,mash:0,mt:3,shots:[],hits:[],splinters:[],flick:0,shake:0,swing:null,
+  wi:0,w:null,held:{},press:{},mash:0,mt:3,shots:[],hits:[],splinters:[],flick:0,shake:0,swing:null,
   mx:M_X,lx:L_X,scale:1,eaten:[false,false],bite:null,bulge:0,melt:0,sirenOn:false,sub:null}}
 const BITE_X=520; // 삼킬 때 괴물이 서는 자리 (책상 앞)
 // 한입에 삼키기: k 0~.35 입을 벌림, .2~.6 사람을 입으로 들어 올림, .6 꿀꺽, 이후 입을 다물고 몸이 커짐
@@ -1205,7 +1197,7 @@ function shootOnce(g){
   sfx('shot');sfx('hit');
 }
 function bossUpdate(dt){
-  const B=G.B;B.t+=dt*(B.ph==='qte1'||B.ph==='qte2'?1:1.1);const t=B.t; // 조작 구간 외에는 10% 빠르게
+  const B=G.B;B.t+=dt;const t=B.t; // 3스테이지는 음원(Rebirth) 길이에 맞춰 진행하므로 배속 없음
   B.shake=Math.max(0,B.shake-dt*12);B.flick=Math.max(0,B.flick-dt);
   for(const a of[B.hits,B.shots,B.splinters])for(const h of a)h.t+=dt;
   B.hits=B.hits.filter(h=>h.t<.7);B.shots=B.shots.filter(s=>s.t<.07);B.splinters=B.splinters.filter(s=>s.t<1.6);
@@ -1231,13 +1223,8 @@ function bossUpdate(dt){
     if(once('a',0)){bsay(BAL.boss.what,()=>B.guards[1].x,1.4);B.guards.forEach(g=>g.aim=true)}
     if(t>.7&&t<2.6)B.guards.forEach(g=>{if(Math.random()<dt*5)shootOnce(g)});
     if(t>2.8)go('qte1');
-  }else if(B.ph==='qte1'){ // 화면에 뜬 키를 눌러 경호원을 한 명씩 쳐냄
-    const g=B.guards[B.gi];
-    if(!g)return go('talk');
-    if(g.fly){if(g.fly.t>1){B.gi++;B.qwait=.5}}
-    else if(B.qkey){B.qt-=dt;if(Math.random()<dt*2)shootOnce(g);
-      if(B.qt<=0){B.qkey=null;B.qwait=.8;shootOnce(g);B.flick=.12}}
-    else{B.qwait-=dt;if(Math.random()<dt*3)shootOnce(g);if(B.qwait<=0){B.qkey=KEYS[Math.floor(Math.random()*4)];B.qt=B.qmax}}
+  }else if(B.ph==='qte1'){ // 경호원 웨이브: 웨이브마다 다른 A S D F 패턴으로 쳐냄
+    if(fightUpdate(dt))return go('talk');
   }else if(B.ph==='talk'){
     // 맷 헤이건: 마르코스가 얼굴을 망가뜨렸고, 그 얼굴을 고치려던 약물의 부작용으로 괴물이 됨
     const T=BAL.boss.talk,L=[[.3,T[0],0,2.2],[2.8,T[1],1,2.8],[6,T[2],0,2.4],[8.7,T[3],1,2.8]].filter(l=>l[1]);
@@ -1267,22 +1254,95 @@ function bossUpdate(dt){
     if(once('m',2.2))sfx('morph');
     B.melt=clamp((t-2.2)/2.4,0,1);
     if(once('sub',4.9))B.sub=BAL.boss.after;
-    if(t>8){G.state='clear';sfx('clear');bgmOn(false)}
+    if(t>8&&(musicDone()||t>40)){G.state='clear';sfx('clear');bgmOn(false)} // 음원이 끝날 때 함께 끝남
   }
   if(HP.has('bot'))bossBot(dt);
 }
+// ---------- 경호원 웨이브 ----------
+// 마르코스 부하들 (생김새만 조금씩 다름)
+const goon=(id,o)=>Object.assign({},BG1,{id,scar:false},o);
+const BG3=goon('bg3',{hair:'short',hairCol:'#111111',skin:'#d7a985'}),BG4=goon('bg4',{hair:'slick',hairCol:'#2a1d14',skin:'#8d5a3b'}),
+  BG5=goon('bg5',{hair:'bald',skin:'#e2b48f'}),BG6=goon('bg6',{hair:'short',hairCol:'#3b2216',skin:'#b98560',mustache:true}),
+  BG7=goon('bg7',{hair:'slick',hairCol:'#111111',skin:'#f0c9a8'}),BG8=goon('bg8',{hair:'short',hairCol:'#5a3a22',skin:'#a8744f'}),
+  BG9=goon('bg9',{hair:'slick',hairCol:'#111111',skin:'#d7a985',shades:true}),BRUTE=goon('brute',{hair:'bald',skin:'#8d5a3b',scar:true});
+// spawn: [들어오는 곳, 서는 자리, 생김새, 바라보는 쪽, 괴물 앞에 그림(붙잡기)]
+const WAVES=[
+  {type:'tap'},
+  {type:'seq',time:3.4,spawn:[[DOOR_X,70,BG3,1],[DOOR_X,145,BG4,1],[DOOR_X,220,BG5,1]]},
+  {type:'hold',time:4.5,need:1.4,spawn:[[W+90,660,BG6,-1]]},
+  {type:'dual',time:2.4,spawn:[[DOOR_X,262,BG7,1,true],[W+90,600,BG8,-1,true]]},
+  {type:'mash',time:3.4,count:8,spawn:[[DOOR_X,300,BRUTE,1,true]]},
+  {type:'timing',ring:1.3,spawn:[[W+90,660,BG9,-1]]},
+];
+const WAVE_LINES=BAL.boss.wave||['막아! 저놈을 막아!','쏴! 계속 쏴!','붙잡아! 놓치지 마!','덩치, 네가 처리해!','총알이 안 먹혀…!'];
+const randKey=()=>KEYS[Math.floor(Math.random()*4)];
+const waveAlive=()=>G.B.guards.filter(g=>g.wave===G.B.wi&&!g.fly);
+function startWave(){
+  const B=G.B,wv=WAVES[B.wi];B.w={type:wv.type,phase:'enter',t:0};
+  if(wv.type==='tap'){B.guards.forEach(g=>g.wave=0);return}
+  for(const [x0,x,spec,face,front] of wv.spawn)B.guards.push({spec,x,face,aim:!front,fly:null,wave:B.wi,ent:{x0,t:0},front:!!front,sc:spec===BRUTE?1.2:1});
+  const line=WAVE_LINES[B.wi-1];if(line)bsay(line,()=>B.mx,2);
+  if(wv.type==='mash'||wv.type==='dual')sfx('growl');
+}
+function newPrompt(){
+  const B=G.B,w=B.w,wv=WAVES[B.wi];w.phase='go';w.t=0;B.press={};
+  if(w.type==='tap'){w.key=randKey();w.qt=w.qmax=1.5}
+  if(w.type==='seq'){w.keys=waveAlive().map(randKey);w.idx=0;w.qt=w.qmax=wv.time}
+  if(w.type==='hold'){w.key=randKey();w.prog=0;w.qt=w.qmax=wv.time}
+  if(w.type==='dual'){const p=[['A','F'],['S','D'],['A','D'],['S','F']];w.keys=p[Math.floor(Math.random()*p.length)];w.qt=w.qmax=wv.time}
+  if(w.type==='mash'){w.key=randKey();w.cnt=0;w.qt=w.qmax=wv.time}
+  if(w.type==='timing'){w.key=randKey();w.rt=0}
+}
+const RING_T=50; // 타이밍 패턴: 원이 이 반지름일 때 누르면 성공
+const ringR=w=>94-44*(w.rt/WAVES[G.B.wi].ring);
+function flyAway(g,dir,win){g.fly={t:0,dir,win};g.aim=false;G.B.swing={t:0};sfx('swat');G.B.shake=8}
+function waveFail(){const B=G.B,w=B.w;w.phase='wait';w.t=0;B.flick=.12;sfx('deny');
+  for(const g of waveAlive())if(!g.front)shootOnce(g);if(w.type==='dual'||w.type==='mash')B.shake=6}
+function fightUpdate(dt){
+  const B=G.B;
+  if(!B.w){if(B.wi>=WAVES.length)return true;startWave()}
+  const w=B.w,wv=WAVES[B.wi],alive=waveAlive();w.t+=dt;
+  for(const g of B.guards)if(g.ent)g.ent.t+=dt;
+  const shoot=r=>{for(const g of alive)if(!g.front&&(!g.ent||g.ent.t>.9)&&Math.random()<dt*r)shootOnce(g)}; // 다 들어온 적만 총을 쏨
+  if(w.phase==='enter'){if(w.t>(w.type==='tap'?.3:1.1))newPrompt();return false}
+  if(w.phase==='wait'){shoot(3);if(w.t>.8)newPrompt();return false}
+  if(w.phase==='done'){if(w.t>1.3){B.w=null;B.wi++}return false}
+  if(!alive.length){w.phase='done';w.t=0;return false}
+  if(w.type==='timing'){w.rt+=dt;shoot(2);if(ringR(w)<RING_T-12)waveFail();return false}
+  w.qt-=dt;
+  if(w.type==='hold'){shoot(7);
+    if(B.held['Key'+w.key]){w.prog+=dt;if(w.prog>=wv.need){for(const g of alive)flyAway(g,1);w.phase='done';w.t=0;sfx('roar');return false}}
+    else w.prog=Math.max(0,w.prog-dt*3)}
+  else if(w.type==='tap'||w.type==='seq')shoot(2);
+  if(w.qt<=0)waveFail();
+  return false;
+}
+function fightKey(code){
+  const B=G.B,w=B.w;if(!w||w.phase!=='go')return;
+  const k=code.replace('Key',''),alive=waveAlive();if(!KEYS.includes(k))return;
+  if(w.type==='tap'){if(k===w.key){flyAway(alive[0],-1);if(alive.length>1){w.phase='wait';w.t=.4}else{w.phase='done';w.t=0}}else{w.qt-=.5;sfx('deny')}}
+  if(w.type==='seq'){if(k===w.keys[w.idx]){flyAway(alive[0],-1);w.idx++;if(w.idx>=w.keys.length){w.phase='done';w.t=0}}else{w.qt-=.6;sfx('deny')}}
+  if(w.type==='dual'&&w.keys.includes(k)){B.press[k]=G.clock;const o=w.keys.find(x=>x!==k);
+    if(B.held['Key'+o]||(B.press[o]!=null&&G.clock-B.press[o]<.3)){alive.forEach(g=>flyAway(g,g.x<B.monX?-1:1));w.phase='done';w.t=0;sfx('roar')}}
+  else if(w.type==='dual'){w.qt-=.4;sfx('deny')}
+  if(w.type==='mash'){if(k===w.key){w.cnt++;sfx('mash');B.shake=3;if(w.cnt>=WAVES[B.wi].count){alive.forEach(g=>flyAway(g,1,true));w.phase='done';w.t=0;sfx('roar')}}else sfx('deny')}
+  if(w.type==='timing'){if(k===w.key&&Math.abs(ringR(w)-RING_T)<=7){alive.forEach(g=>flyAway(g,1));w.phase='done';w.t=0}else waveFail()}
+}
 function bossKey(code){
   const B=G.B;
-  if(B.ph==='qte1'&&B.qkey){
-    if(code==='Key'+B.qkey){const g=B.guards[B.gi];B.qkey=null;g.fly={t:0};g.aim=false;B.swing={t:0};sfx('swat');B.shake=8}
-    else if(['KeyA','KeyS','KeyD','KeyF'].includes(code)){B.qt=Math.max(.01,B.qt-.5);sfx('deny')}
-  }
+  if(B.ph==='qte1')fightKey(code);
   if(B.ph==='qte2'&&code==='Space'&&B.done.has('a')){B.mash=Math.min(1,B.mash+1/14);sfx('mash')}
 }
 // 테스트용 자동 플레이 (#bot)
 function bossBot(dt){
-  const B=G.B;if((G.botT=(G.botT||0)-dt)>0)return;G.botT=.09;
-  if(B.ph==='qte1'&&B.qkey&&B.qt<B.qmax-.3)bossKey('Key'+B.qkey);
+  const B=G.B,w=B.w;
+  if(B.ph==='qte1'&&w&&w.phase==='go'&&w.type==='timing'&&Math.abs(ringR(w)-RING_T)<3){fightKey('Key'+w.key);return}
+  if(B.ph==='qte1'&&w&&w.type==='hold')B.held={['Key'+w.key]:w.phase==='go'&&w.t>.2};
+  if((G.botT=(G.botT||0)-dt)>0)return;G.botT=.09;
+  if(B.ph==='qte1'&&w&&w.phase==='go'&&w.t>.25){
+    if(w.type==='tap'||w.type==='mash')fightKey('Key'+w.key);
+    if(w.type==='seq')fightKey('Key'+w.keys[w.idx]);
+    if(w.type==='dual'){fightKey('Key'+w.keys[0]);fightKey('Key'+w.keys[1])}}
   if(B.ph==='qte2')bossKey('Space');
 }
 // 괴물 입 (벌어진 정도 open, 크기 s)
@@ -1293,6 +1353,45 @@ function drawMouth(x,y,s,open,teethOnly){
   for(let i=0;i<n;i++){const tx=x-rx+tw*i+tw*.1;
     ctx.beginPath();ctx.moveTo(tx,y-ry*.85);ctx.lineTo(tx+tw*.8,y-ry*.85);ctx.lineTo(tx+tw*.4,y-ry*.85+th);ctx.fill();
     ctx.beginPath();ctx.moveTo(tx,y+ry*.85);ctx.lineTo(tx+tw*.8,y+ry*.85);ctx.lineTo(tx+tw*.4,y+ry*.85-th);ctx.fill()}
+}
+// 경호원 그리기: 문·화면 밖에서 뛰어 들어오고, 쳐내면 빙글빙글 날아감 (거구는 창문을 깨고 밖으로)
+function drawGoon(g){
+  const B=G.B,sc=g.sc||1,run=g.ent&&g.ent.t<.9;
+  const spr=frames(g.aim&&!run?aimOf(g.spec):g.spec,g.face)[run?Math.floor(((G.clock*2.6)%1)*8):0];
+  let x=g.ent?g.ent.x0+(g.x-g.ent.x0)*ease(clamp(g.ent.t/.9,0,1)):g.x;
+  if(g.front&&!g.fly)x+=Math.sin(G.clock*20+g.x)*2; // 매달려 버둥거림
+  if(g.fly){const k=clamp(g.fly.t,0,1);
+    if(g.fly.win){const tx=690,ty=GY-190,fx=x+(tx-x)*ease(k),fy=GY+(ty-GY)*Math.sin(k*Math.PI*.5)-Math.sin(k*Math.PI)*60;
+      if(k>.55&&!B.winBroken){B.winBroken=true;B.shake=10;sfx('glass');for(let i=0;i<26;i++)B.splinters.push({x:tx+(Math.random()-.5)*120,y:ty-40+(Math.random()-.5)*120,vx:(Math.random()-.3)*260,vy:-60-Math.random()*160,r:Math.random()*6,t:0,glass:true})}
+      if(k>.62)return;
+      ctx.save();ctx.translate(fx,fy-120);ctx.rotate(k*4);ctx.scale(sc*(1-.3*k),sc*(1-.3*k));ctx.translate(-fx,-(fy-120));drawChar(spr,fx,{y:fy,shadow:false});ctx.restore();return}
+    const fx=x+g.fly.dir*k*520,fy=GY-Math.sin(k*Math.PI)*170;
+    ctx.save();ctx.translate(fx,fy-120);ctx.rotate(g.fly.dir*k*5);ctx.translate(-fx,-(fy-120));drawChar(spr,fx,{y:fy,shadow:false,alpha:1-k*.3,sx:sc,sy:sc});ctx.restore();return}
+  drawChar(spr,x,{sx:sc,sy:sc});
+}
+// 패턴별 조작 표시 (화면 아래 가운데)
+function keyBox(x,y,k,st){ // st: 0 보통, 1 지금 누를 키, 2 이미 누름
+  ctx.fillStyle=st===2?'rgba(40,90,50,.85)':'rgba(8,4,6,.85)';ctx.strokeStyle=st===1?'#ffd27a':st===2?'#5ad08a':'#ff3a4a';ctx.lineWidth=3;
+  ctx.beginPath();ctx.roundRect(x-34,y-34,68,68,9);ctx.fill();ctx.stroke();
+  ctx.fillStyle=st===2?'#bfe8c8':'#fff';ctx.font='bold 36px '+FONT;ctx.textAlign='center';ctx.fillText(k,x,y+13);
+}
+function timeBar(x,y,f){ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(x-110,y,220,5);ctx.fillStyle='#ffd27a';ctx.fillRect(x-110,y,220*clamp(f,0,1),5)}
+function drawFightPrompt(){
+  const B=G.B,w=B.w;if(!w||w.phase!=='go')return;const x=W/2,y=462,f=w.qt/w.qmax;
+  ctx.textAlign='center';
+  if(w.type==='tap'){keyBox(x,y,w.key,1);ctx.strokeStyle='#ffd27a';ctx.lineWidth=5;ctx.beginPath();ctx.arc(x,y,52,-Math.PI/2,-Math.PI/2+Math.PI*2*f);ctx.stroke()}
+  if(w.type==='seq'){const n=w.keys.length;w.keys.forEach((k,i)=>keyBox(x+(i-(n-1)/2)*84,y-6,k,i<w.idx?2:i===w.idx?1:0));timeBar(x,y+38,f)}
+  if(w.type==='hold'){keyBox(x,y-6,w.key,1);const p=w.prog/WAVES[B.wi].need;
+    ctx.strokeStyle='rgba(255,255,255,.2)';ctx.lineWidth=7;ctx.beginPath();ctx.arc(x,y-6,50,0,Math.PI*2);ctx.stroke();
+    ctx.strokeStyle='#ffd27a';ctx.beginPath();ctx.arc(x,y-6,50,-Math.PI/2,-Math.PI/2+Math.PI*2*clamp(p,0,1));ctx.stroke();
+    ctx.fillStyle='#ffd27a';ctx.font='bold 15px '+FONT;ctx.fillText('HOLD',x+86,y);timeBar(x,y+50,f)}
+  if(w.type==='dual'){keyBox(x-56,y-6,w.keys[0],B.press[w.keys[0]]!=null?2:1);keyBox(x+56,y-6,w.keys[1],B.press[w.keys[1]]!=null?2:1);
+    ctx.fillStyle='#fff';ctx.font='bold 28px '+FONT;ctx.fillText('+',x,y+4);timeBar(x,y+38,f)}
+  if(w.type==='mash'){keyBox(x,y-6,w.key,1);const left=WAVES[B.wi].count-w.cnt;
+    ctx.fillStyle='#ffd27a';ctx.font='bold 26px '+FONT;ctx.textAlign='left';ctx.fillText('×'+left,x+46,y+4);ctx.textAlign='center';timeBar(x,y+38,f)}
+  if(w.type==='timing'){keyBox(x,y-6,w.key,1);const r=ringR(w),hit=Math.abs(r-RING_T)<=7;
+    ctx.strokeStyle='rgba(255,255,255,.28)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y-6,RING_T,0,Math.PI*2);ctx.stroke();
+    ctx.strokeStyle=hit?'#5ad08a':'#ffd27a';ctx.lineWidth=4;ctx.beginPath();ctx.arc(x,y-6,Math.max(1,r),0,Math.PI*2);ctx.stroke()}
 }
 const BM=220; // 보스 방 그림 여백 (괴물이 커지면 카메라가 물러나며 보임)
 function drawBoss(){
@@ -1308,6 +1407,8 @@ function drawBoss(){
   ctx.strokeStyle='rgba(180,190,230,.25)';ctx.lineWidth=1;ctx.beginPath();
   for(let i=0;i<40;i++){const x=540+((i*53+G.clock*90)%330),y=60+((i*97+G.clock*520)%250);ctx.moveTo(x,y);ctx.lineTo(x-4,y+14)}ctx.stroke();
   if(B.sirenOn){ctx.fillStyle=Math.sin(G.clock*7)>0?'rgba(255,30,40,.35)':'rgba(40,80,255,.35)';ctx.fillRect(540,60,300,230)}
+  if(B.winBroken){ctx.fillStyle='#020104';ctx.beginPath();ctx.moveTo(600,95);ctx.lineTo(660,80);ctx.lineTo(700,120);ctx.lineTo(770,100);ctx.lineTo(790,170);ctx.lineTo(760,250);ctx.lineTo(690,270);ctx.lineTo(640,230);ctx.lineTo(590,250);ctx.lineTo(610,170);ctx.closePath();ctx.fill();
+    ctx.strokeStyle='rgba(200,220,255,.5)';ctx.lineWidth=1.2;ctx.beginPath();for(const [a,b] of[[600,95],[660,80],[700,120],[770,100],[790,170],[760,250],[690,270],[640,230],[590,250],[610,170]]){ctx.moveTo(690,175);ctx.lineTo(a,b)}ctx.stroke()} // 거구가 깨고 나간 창문
   ctx.restore();
   // 문짝 (부서지면 바닥에 쓰러짐)
   if(!B.door){ctx.fillStyle='#2a1208';ctx.fillRect(DOOR_X-46,GY-213,92,213);ctx.fillStyle='#c8a050';ctx.fillRect(DOOR_X+30,GY-110,6,6)}
@@ -1321,11 +1422,8 @@ function drawBoss(){
     if(v.s===MARCOS&&!late){ctx.fillStyle='rgba(255,130,50,.95)';ctx.beginPath();ctx.arc(v.x-24,GY-216,2.2,0,Math.PI*2);ctx.fill()} // 시가 불씨
   }
   ctx.drawImage(BG.desk,0,0);
-  // 경호원 (쳐내면 날아감)
-  for(const g of B.guards){const spr=frames(g.aim?aimOf(g.spec):g.spec,g.face)[0];
-    if(g.fly){const k=clamp(g.fly.t,0,1),x=g.x-k*520,fy=GY-Math.sin(k*Math.PI)*170;
-      ctx.save();ctx.translate(x,fy-120);ctx.rotate(-k*5);ctx.translate(-x,-(fy-120));drawChar(spr,x,{y:fy,shadow:false,alpha:1-k*.3});ctx.restore()}
-    else drawChar(spr,g.x)}
+  // 경호원 (괴물에 매달린 적은 괴물 앞에 따로 그림)
+  for(const g of B.guards)if(!g.front||g.fly)drawGoon(g);
   // 괴물
   const mon=monSprite();
   const S=B.scale;
@@ -1350,20 +1448,18 @@ function drawBoss(){
     if(B.swing){const k=B.swing.t/.5;ctx.strokeStyle=`rgba(150,95,45,${.7*(1-k)})`;ctx.lineWidth=16;ctx.lineCap='round';
       ctx.beginPath();ctx.arc(B.monX-30,GY-170,150,Math.PI*(.75+.6*k),Math.PI*(1.05+.6*k));ctx.stroke()}
   }
+  for(const g of B.guards)if(g.front&&!g.fly)drawGoon(g); // 팔·머리에 매달린 적
   // 총구 섬광, 진흙에 박히는 총알, 부서진 문 조각
   for(const s of B.shots){ctx.fillStyle='rgba(255,230,140,.95)';ctx.beginPath();ctx.arc(s.x,s.y,9,0,Math.PI*2);ctx.fill()}
   for(const h of B.hits){const a=1-h.t/.7;ctx.strokeStyle=`rgba(210,150,90,${a})`;ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(h.x,h.y,4+h.t*34,2+h.t*14,0,0,Math.PI*2);ctx.stroke();
     ctx.fillStyle=`rgba(30,15,5,${a})`;ctx.beginPath();ctx.arc(h.x,h.y,3,0,Math.PI*2);ctx.fill()}
-  for(const s of B.splinters){const x=s.x+s.vx*s.t,y=Math.min(GY-3,s.y+s.vy*s.t+400*s.t*s.t);ctx.save();ctx.translate(x,y);ctx.rotate(s.r+s.t*8);ctx.fillStyle='#3a1a0a';ctx.fillRect(-7,-2,14,4);ctx.restore()}
+  for(const s of B.splinters){const x=s.x+s.vx*s.t,y=Math.min(GY-3,s.y+s.vy*s.t+400*s.t*s.t);ctx.save();ctx.translate(x,y);ctx.rotate(s.r+s.t*8);ctx.fillStyle=s.glass?'rgba(190,215,255,.8)':'#3a1a0a';ctx.fillRect(-7,-2,14,4);ctx.restore()}
   ctx.restore();
   // 조명 깜빡임
   if(B.flick>0&&Math.random()<.5){ctx.fillStyle='rgba(0,0,0,.78)';ctx.fillRect(0,0,W,H)}
   ctx.drawImage(BG.vig,0,0);
   // 조작 표시
-  if(B.ph==='qte1'&&B.qkey){const x=W/2,y=462,k=B.qt/B.qmax;
-    ctx.fillStyle='rgba(8,4,6,.85)';ctx.strokeStyle='#ff3a4a';ctx.lineWidth=3;ctx.beginPath();ctx.roundRect(x-42,y-42,84,84,10);ctx.fill();ctx.stroke();
-    ctx.strokeStyle='#ffd27a';ctx.lineWidth=5;ctx.beginPath();ctx.arc(x,y,56,-Math.PI/2,-Math.PI/2+Math.PI*2*k);ctx.stroke();
-    ctx.fillStyle='#fff';ctx.font='bold 46px '+FONT;ctx.textAlign='center';ctx.fillText(B.qkey,x,y+16)}
+  if(B.ph==='qte1')drawFightPrompt();
   if(B.ph==='qte2'&&B.done.has('a')){const x=W/2,y=446,pulse=1+Math.sin(G.clock*18)*.04;
     ctx.save();ctx.translate(x,y);ctx.scale(pulse,pulse);ctx.fillStyle='rgba(8,4,6,.85)';ctx.strokeStyle='#ff3a4a';ctx.lineWidth=3;
     ctx.beginPath();ctx.roundRect(-90,-26,180,52,10);ctx.fill();ctx.stroke();ctx.fillStyle='#fff';ctx.font='bold 30px '+FONT;ctx.textAlign='center';ctx.fillText('SPACE',0,11);ctx.restore();
@@ -1428,9 +1524,17 @@ function drawEnding(){
 }
 function drawTheEnd(){
   ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);ctx.textAlign='center';
-  ctx.shadowColor='#ff2a3d';ctx.shadowBlur=24;ctx.fillStyle='#f0dcd0';ctx.font='bold 64px '+FONT;ctx.fillText('THE END',W/2,240);ctx.shadowBlur=0;
-  ctx.font='15px '+FONT;ctx.fillStyle='#8a7a7a';ctx.fillText('Clayface_aScene — 비상업적 팬 오마주',W/2,286);
-  ctx.globalAlpha=.45+.45*Math.sin(G.clock*3);ctx.font='18px '+FONT;ctx.fillStyle='#e8d8d8';ctx.fillText('PRESS SPACE',W/2,360);ctx.globalAlpha=1;
+  ctx.shadowColor='#ff2a3d';ctx.shadowBlur=24;ctx.fillStyle='#f0dcd0';ctx.font='bold 64px '+FONT;ctx.fillText('THE END',W/2,150);ctx.shadowBlur=0;
+  ctx.font='15px '+FONT;ctx.fillStyle='#8a7a7a';ctx.fillText('Clayface_aScene — 비상업적 팬 오마주',W/2,190);
+  // 음악 저작권 표기
+  const C=[['MUSIC',14,'#ff8090',248],
+    ['“Clayface Theme” — Volker Bertelmann  (STAGE 1 · 4)',15,'#e0d0d0',276],
+    ['“Pretty No More” — Volker Bertelmann  (STAGE 2)',15,'#e0d0d0',300],
+    ['“Rebirth” — Volker Bertelmann  (STAGE 3)',15,'#e0d0d0',324],
+    ['from Clayface (2026) Original Motion Picture Score · via YouTube “Thriller Soundtrack Music”',13,'#a89898',352],
+    ['모든 음악의 저작권은 작곡가와 원 저작권자에게 있습니다.',13,'#a89898',374]];
+  for(const [t,s,c,y] of C){ctx.font=(t==='MUSIC'?'bold ':'')+s+'px '+FONT;ctx.fillStyle=c;ctx.fillText(t,W/2,y)}
+  ctx.globalAlpha=.45+.45*Math.sin(G.clock*3);ctx.font='18px '+FONT;ctx.fillStyle='#e8d8d8';ctx.fillText('PRESS SPACE',W/2,450);ctx.globalAlpha=1;
 }
 
 // ================= 입력 =================
@@ -1453,7 +1557,7 @@ addEventListener('keydown',e=>{
   if(S==='over'&&(c==='Space'||c==='Enter'))return startStage(G.si);
   if((S==='play'||S==='boss')&&(c==='KeyP'||c==='Escape')){G.prev=S;G.state='paused';bgmOn(false);return}
   if(S==='paused'&&(c==='KeyP'||c==='Escape'||c==='Space')){G.state=G.prev||'play';bgmOn(true);return}
-  if(S==='boss')return bossKey(c);
+  if(S==='boss'){G.B.held[c]=true;return bossKey(c)}
   onKey(c);
 });
 cv.addEventListener('click',e=>{
@@ -1462,6 +1566,7 @@ cv.addEventListener('click',e=>{
   if(Math.hypot(x-SB.x,y-SB.y)<=SB.r+6)return toggleMute();
   if(G.state!=='stairs'&&(G.help||Math.hypot(x-HB.x,y-HB.y)<=HB.r+6))toggleHelp();
 });
+addEventListener('keyup',e=>{if(G&&G.state==='boss'&&G.B)G.B.held[e.code]=false}); // 3스테이지 '꾹 누르기' 패턴
 addEventListener('blur',()=>{if(G.state==='play'||G.state==='boss'){G.prev=G.state;G.state='paused';bgmOn(false)}});
 
 // ================= 시작 =================
@@ -1473,9 +1578,12 @@ BG.boss=makeBossRoom();BG.desk=makeDesk();
 newGame(clamp((+HP.get('stage')||1)-1,0,STAGES.length-1),HP.has('play')?'play':'title');
 if(HP.has('help'))G.help=true;
 if(HP.has('tclock'))G.clock=+HP.get('tclock'); // 테스트용: 타이틀 연출 시점
+if(HP.has('wave')&&G.B){const B=G.B;G.state='boss';B.ph='qte1';B.monA=1;B.monX=MON_X;B.door=1;B.wi=+HP.get('wave'); // 테스트용: 원하는 웨이브부터
+  if(B.wi>0)B.guards.forEach(g=>{g.wave=0;g.fly={t:9,dir:-1}})}
+if(HP.has('musictest')){music(musicFor(G.si));setTimeout(()=>{document.title='MUSIC '+(BGMEL?BGMKEY+' '+BGMEL.currentTime.toFixed(2)+'/'+(BGMEL.duration||0).toFixed(1)+' loop='+BGMEL.loop+' paused='+BGMEL.paused:'none')},2500)} // 테스트용: 음원 재생 확인
 if(HP.has('intro')){startIntro();G.dlg.i=+HP.get('intro')||0;G.dlg.t=1}
 if(HP.has('stairs')){G.look=G.npcs.find(n=>n.spec.mafia)?.spec||GUARD;startStairs()}
-if(HP.has('sim')){const T=+HP.get('sim');while(G.clock<T&&['intro','play','end','stairs','boss','ending'].includes(G.state))update(1/60);document.title='SIM '+G.state+(G.overMsg?' / '+G.overMsg:'');
+if(HP.has('sim')){const T=+HP.get('sim');while(G.clock<T&&['intro','play','end','stairs','boss','ending'].includes(G.state))update(1/60);document.title='SIM '+G.state+(G.overMsg?' / '+G.overMsg:'')+' @'+G.clock.toFixed(1)+(G.B?' ph='+G.B.ph+' wi='+G.B.wi:'');
   if(HP.has('morph')){onKey('Space');onKey('KeyA');if(G.morph)G.morph.t=+HP.get('morph')}
   if(HP.has('crack')){G.look=G.npcs[G.npcs.length-1].spec;frames(G.look,1);G.hard=+HP.get('crack')}}
 let last=performance.now();
