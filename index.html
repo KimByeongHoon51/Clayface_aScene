@@ -504,11 +504,11 @@ function audioInit(){
   if(AU.c){if(AU.c.state==='suspended')AU.c.resume();return}
   const c=new (window.AudioContext||window.webkitAudioContext)();AU.c=c;
   AU.m=c.createGain();AU.m.gain.value=MUTED?0:.85;const comp=c.createDynamicsCompressor();AU.m.connect(comp);comp.connect(c.destination);
-  AU.sfx=c.createGain();AU.sfx.connect(AU.m);
+  AU.sfx=c.createGain();AU.sfx.gain.value=.55;AU.sfx.connect(AU.m); // 효과음 전체 음량
   const nb=c.createBuffer(1,c.sampleRate*2,c.sampleRate),nd=nb.getChannelData(0);for(let i=0;i<nd.length;i++)nd[i]=Math.random()*2-1;AU.nb=nb;
   const len=c.sampleRate*2.6,ir=c.createBuffer(2,len,c.sampleRate);
   for(let ch=0;ch<2;ch++){const d=ir.getChannelData(ch);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,3)}
-  AU.rv=c.createConvolver();AU.rv.buffer=ir;const rg=c.createGain();rg.gain.value=.4;AU.rv.connect(rg);rg.connect(AU.m);
+  AU.rv=c.createConvolver();AU.rv.buffer=ir;const rg=c.createGain();rg.gain.value=.26;AU.rv.connect(rg);rg.connect(AU.m);
   AU.wet=c.createGain();AU.wet.connect(AU.sfx);AU.wet.connect(AU.rv);
   // 빗소리 (거리에서만)
   const rain=c.createBufferSource();rain.buffer=nb;rain.loop=true;const rf=c.createBiquadFilter();rf.type='bandpass';rf.frequency.value=2600;rf.Q.value=.4;
@@ -553,7 +553,22 @@ function schedule(){
     if(playing||G.state==='title'){const f=[392,415.3,369.99][Math.random()*3|0];osc('sine',f,t,3.2,.035,AU.wet);osc('sine',f*2.76,t,1.6,.012,AU.wet)}
     AU.next.bell+=6+Math.random()*4}
 }
-function bgmOn(on){if(!AU.c)return;const t=AU.c.currentTime;AU.bgm.gain.cancelScheduledValues(t);AU.bgm.gain.setTargetAtTime(on?.5:0,t,on?.8:.4)}
+// 배경음악 파일: 폴더에 있으면 재생하고, 없거나 막히면 합성 배경음(드론)을 그대로 씀
+const MUSIC={main:'bgm_main.mp3',boss:'bgm_boss.mp3'},MUSIC_VOL=.45;
+let BGMEL=null,BGMKEY=null,MUSIC_OK=false;
+function musicFor(si){return STAGES[si]&&STAGES[si].boss?'boss':'main'}
+function music(key){
+  if(BGMKEY===key&&BGMEL)return;
+  if(BGMEL){BGMEL.pause();BGMEL=null}MUSIC_OK=false;BGMKEY=key;if(!key)return;
+  const a=new Audio(MUSIC[key]);a.loop=true;a.volume=MUSIC_VOL;a.muted=MUTED;BGMEL=a;
+  a.addEventListener('playing',()=>{if(BGMEL===a){MUSIC_OK=true;bgmOn(true)}});
+  a.addEventListener('error',()=>{if(BGMEL===a){BGMEL=null;MUSIC_OK=false;bgmOn(true)}});
+  a.play().catch(()=>{});
+}
+function bgmOn(on){
+  if(BGMEL){if(on)BGMEL.play().catch(()=>{});else BGMEL.pause()}
+  if(!AU.c)return;const t=AU.c.currentTime;AU.bgm.gain.cancelScheduledValues(t);AU.bgm.gain.setTargetAtTime(on&&!MUSIC_OK?.5:0,t,on?.8:.4) // 음악 파일이 나오면 드론은 끔
+}
 function setClub(gain,freq){if(!AU.c)return;AU.club.gain.value=gain;AU.clubF.frequency.value=freq}
 const SFX={
   sel(){const t=AU.c.currentTime;osc('triangle',900,t,.05,.05);osc('square',1800,t,.02,.015)},
@@ -627,7 +642,7 @@ function newGame(si,state){
 }
 const keeperX=k=>PX+120+G.ground*(G.checks[k].D-G.d);
 const lastCheck=()=>G.ck===G.checks.length-1;
-function say(text,at,dur=1.6){G.bubble={text,at,t:dur}}
+function say(text,at,dur=1.6){if(!text)return;G.bubble={text,at,t:Math.max(dur,.9+text.length*.085)}} // 긴 대사는 글자 수만큼 더 오래 보임
 function toast(text){G.toast={text,t:1.6}}
 
 function setLook(spec){
@@ -1049,6 +1064,7 @@ let MUTED=false;try{MUTED=localStorage.getItem('clayface_mute')==='1'}catch(e){}
 function toggleMute(){
   MUTED=!MUTED;try{localStorage.setItem('clayface_mute',MUTED?'1':'0')}catch(e){}
   if(AU.c)AU.m.gain.setTargetAtTime(MUTED?0:.85,AU.c.currentTime,.05);
+  if(BGMEL)BGMEL.muted=MUTED;
 }
 function helpLines(){
   const st=STG();
@@ -1359,7 +1375,7 @@ function drawBoss(){
 }
 
 // ================= 엔딩: 빗속으로 사라짐 =================
-const ENDLINES=(BAL.ending||[]).map((s,i)=>[4.4+i*2.7,s]); // 엔딩 독백 (근접 장면에서 차례로)
+const ENDLINES=(BAL.ending||[]).reduce((a,s)=>{const at=a.length?a[a.length-1][0]+Math.max(2.7,a[a.length-1][1].length*.11):4.4;a.push([at,s]);return a},[]); // 엔딩 독백 (근접 장면에서 차례로)
 const PUDDLE_X=560;
 function startEnding(){
   G.state='ending';G.en={t:0,x:110,step:0,sub:null};G.slots=[null,null,null,null];G.cool=0;G.morph=null;G.bubble=null;
@@ -1370,7 +1386,7 @@ function endingUpdate(dt){
   if(t<3.4)E.x=110+(PUDDLE_X-90-110)*ease(clamp(t/3.2,0,1));
   if(t>2&&E.step===0){E.step=1;setLook(PLAYER)} // 변장이 풀려 맷으로
   if(t>5.6&&E.step===1){E.step=2;sfx('growl')}
-  E.sub=null;for(const [at,s] of ENDLINES)if(t>=at&&t<at+2.6)E.sub=s;
+  E.sub=null;for(const [at,s] of ENDLINES)if(t>=at&&t<at+Math.max(2.6,s.length*.11))E.sub=s;
   if(t>10.2)E.x=PUDDLE_X-90+(t-10.2)*150;
   if(t>14){G.state='theend';bgmOn(false)}
 }
@@ -1418,7 +1434,7 @@ function drawTheEnd(){
 }
 
 // ================= 입력 =================
-function startStage(si,intro){newGame(si,'play');if(intro&&STG().intro&&STG().intro.length)startIntro();bgmOn(true)}
+function startStage(si,intro){newGame(si,'play');if(intro&&STG().intro&&STG().intro.length)startIntro();music(musicFor(si));bgmOn(true)}
 addEventListener('keydown',e=>{
   const c=e.code;
   if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Space'].includes(c))e.preventDefault();
@@ -1428,7 +1444,7 @@ addEventListener('keydown',e=>{
   if(c==='KeyM'){toggleMute();return}
   if(c==='KeyH'||c==='Slash'||(G.help&&c==='Escape')){if(S!=='stairs')toggleHelp();return}
   if(G.help)return;
-  if(S==='title'&&(c==='Space'||c==='Enter')){if(STG().intro&&STG().intro.length)startIntro();else G.state=STG().boss?'boss':'play';bgmOn(true);return}
+  if(S==='title'&&(c==='Space'||c==='Enter')){if(STG().intro&&STG().intro.length)startIntro();else G.state=STG().boss?'boss':'play';music(musicFor(G.si));bgmOn(true);return}
   if(S==='intro'){if(c==='Space'||c==='Enter')nextLine();if(c==='Escape'){G.state='play';G.dlg=null}return}
   if(S==='clear'&&(c==='Space'||c==='Enter'))return startStage(G.si+1,true);
   if(S==='theend'&&(c==='Space'||c==='Enter')){newGame(0,'title');return}
