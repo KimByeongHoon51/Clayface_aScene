@@ -315,11 +315,12 @@ const CHECKS={
     ok:'왜 이제 와. 빨리 안 다니면 보스가 화낼 거야.',fail:['넌 뭐야. 나가.','넌 우리 애가 아니잖아.'],over:'복도 출입 거부 — 젊은 부하가 아니다'},
   boss:{keeper:GUARD,gate:'stair',check:s=>!!s.old,call:'보스 방은 고참만 올라간다.',
     ok:'올라가. 보스가 기다린다.',fail:['넌 뭐야. 꺼져.','넌 우리 식구가 아니야.'],failYoung:'애송이는 못 올라가.',over:'정체가 들켰다 — 고참 마피아가 아니다'},
-  police:{keeper:COP,gate:'gtape',check:s=>!!s.police,call:'현장 통제 중이다. 경찰 외엔 못 지나간다.',
-    ok:'수고한다. 지원 병력은 정문으로.',fail:['거기 너! 수배자 인상착의와 똑같은데?','경찰 외엔 못 지나간다고 했지.'],over:'통제선 돌파 실패 — 경찰이 아니다'},
-  cordon:{keeper:DETECT,gate:'gexit',check:s=>!!s.guest,call:'민간인은 밖으로! 경찰은 안에 남아 현장을 지켜!',
-    ok:'어서 나가요. 조심하고.',fail:['저 금발… 수배자다! 잡아!','넌 못 나간다.'],over:'탈출 실패 — 민간인이 아니다',
-    failFor:s=>s.police?'넌 안에 남으라고 했잖아!':s.staff?'직원들은 아직 조사가 남았어.':s.mafia?'마피아 놈이다! 체포해!':null},
+  police:{keeper:COP,gate:'gtape',check:s=>!!(s.police||s.guest),call:'',
+    ok:'확인됐다. 지나가.',fail:['거기 너! 수배자 인상착의와 똑같은데?','넌 못 지나간다.'],over:'통제선 돌파 실패 — 경찰이나 민간인이 아니다',
+    failFor:s=>s.mafia?'마피아 놈이다! 체포해!':null},
+  cordon:{keeper:DETECT,gate:'gexit',check:s=>!!s.police,call:'',
+    ok:'지원 병력이군. 밖을 맡아 줘.',fail:['저 금발… 수배자다! 잡아!','넌 못 나간다.'],over:'탈출 실패 — 경찰이 아니다',
+    failFor:s=>s.guest?'민간인은 아직 못 나간다. 조사가 남았어.':s.mafia?'마피아 놈이다! 체포해!':null},
 };
 // 1스테이지는 튜토리얼이라 진흙이 굳지 않음 (문지기까지 40초가 넘어 일찍 변신하면 무너져 버림)
 const STAGES=[
@@ -334,10 +335,11 @@ const STAGES=[
     },
   {name:'보스 방',place:'boss',boss:true,rule:'화면에 뜨는 키를 눌러 경호원을 쳐내고, SPACE 연타로 마르코스를 삼켜라'},
   {name:'탈출',place:'escape',pass:34,gen:genS4,patrols:true,
-    segs:[{police:4,mafia:4,staff:3,guest:2},{guest:6,police:4,staff:2,mafia:2}],
+    segs:[{guest:5,police:4,mafia:4},{guest:7,police:5}],noCall:true,
+    phaseLines:[['경찰의 포위망을 벗어나야 해.','경찰이나 다른 사람의 모습이 필요해.'],['출구가 보인다.','경찰의 모습으로 나가자.']],
     checks:[CHECKS.police,CHECKS.cordon],
-    rule:'바 출구 — 경찰복 · 정문 — 일반 손님 · 순찰 — 마피아나 원래 모습이면 체포',
-    intro:['사이렌 소리… 놈들이 몰려온다.','여기서 잡히면 끝이다.','경찰 틈에 섞여 빠져나가자.']},
+    rule:'바 출구 — 경찰이나 민간인 · 정문 — 경찰만 · 순찰 — 마피아나 원래 모습이면 체포',
+    intro:['경찰이 오고 있어.','여길 탈출해야 해.']},
 ];
 const STG=()=>STAGES[G.si];
 
